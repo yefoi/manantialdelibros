@@ -129,7 +129,7 @@ usa ese archivo y el propio catálogo para ofrecer las listas de trabajo:
 | Nuevos en el listado | altas desde la última importación |
 | Ya no están | bajas (desaparecidos del Excel) |
 | Sin foto | sin ninguna portada |
-| Sin ubicación | sin estantería o con estantería 0 |
+| Sin ubicación | sin estantería asignada (la estantería 0 es una estantería real) |
 | Ficha incompleta | sin autor ni editorial |
 | Sin estado | sin disponible / prestado / donado |
 

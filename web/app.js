@@ -36,6 +36,11 @@
 
   const ETIQUETA_ESTADO = { Disponible: 'Disponible', Prestado: 'Prestado', Donado: 'Donado', '': 'Sin estado' };
 
+  // "Estantería 7 · 5b"  (la balda 0 significa "sin balda concreta")
+  const ubicacion = (l) => l.estanteria
+    ? 'Estantería ' + l.estanteria + (l.balda && l.balda !== '0' ? ' · ' + l.balda : '')
+    : '';
+
   function toast(texto, esError) {
     const caja = $('#avisos');
     const el = document.createElement('div');
@@ -58,7 +63,7 @@
   function tarjetaHTML(l) {
     const portada = (l.portadas && l.portadas.length) ? l.portadas[0] : null;
     const claseInsignia = 'insignia insignia-' + (l.estado || 'vacia');
-    const pie = [l.signatura, l.estanteria ? 'Estantería ' + l.estanteria + (l.balda ? ' · ' + l.balda : '') : '']
+    const pie = [l.signatura, l.estanteria ? ubicacion(l).replace('Estantería ', 'Est. ') : '']
       .filter(Boolean).join(' · ');
     return `
       <button class="tarjeta" data-id="${escap(l.id)}" type="button">
@@ -193,7 +198,7 @@
       l.autor ? ['Autor', l.autor] : null,
       l.editorial ? ['Editorial', l.editorial] : null,
       l.signatura ? ['Categoría', l.signatura] : null,
-      l.estanteria ? ['Ubicación', 'Estantería ' + l.estanteria + (l.balda ? ' · balda ' + l.balda : '')] : null,
+      l.estanteria ? ['Ubicación', ubicacion(l)] : null,
       l.paginas ? ['Páginas', l.paginas] : null,
       l.genero ? ['Género', l.genero] : null,
       l.fechaEntrada ? ['Entrada', l.fechaEntrada] : null,
@@ -390,7 +395,7 @@
     if (g === 'altas') return (nov.altas || []).map((a) => L.find((l) => l.id === a.id) || a);
     if (g === 'bajas') return (nov.bajas || []).map((b) => Object.assign({ titulo: b.titulo, autor: b.autor, _baja: true }, b));
     if (g === 'sinFoto') return L.filter((l) => !(l.portadas && l.portadas.length));
-    if (g === 'sinUbicacion') return L.filter((l) => !l.estanteria || l.estanteria === '0');
+    if (g === 'sinUbicacion') return L.filter((l) => !l.estanteria);
     if (g === 'incompletos') return L.filter((l) => !l.autor && !l.editorial);
     if (g === 'sinEstado') return L.filter((l) => !l.estado);
     return [];
@@ -458,7 +463,7 @@
 
     $('#revisionLista').innerHTML = trozo.length ? trozo.map((l) => {
       const etiqueta = l.id ? 'button' : 'div';
-      const donde = [l.estanteria ? 'Est. ' + l.estanteria + (l.balda ? '·' + l.balda : '') : '', l.estado || '', l._baja ? 'venía ' + (l.veces || 1) + ' vez/veces' : '']
+      const donde = [l.estanteria ? ubicacion(l).replace('Estantería ', 'Est. ') : '', l.estado || '', l._baja ? 'venía ' + (l.veces || 1) + ' vez/veces' : '']
         .filter(Boolean).join(' · ');
       return '<' + etiqueta + ' class="revision-fila ' + (l.id ? 'pulsable' : '') + '" ' +
         (l.id ? 'type="button" data-id="' + escap(l.id) + '"' : '') + '>' +
