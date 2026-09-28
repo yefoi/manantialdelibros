@@ -184,10 +184,17 @@ $signaturasCanonicas = @{
 }
 
 $libros = New-Object Collections.ArrayList
+$articulosExcel = 0
 foreach ($f in $filas) {
   $c = $f.C
   $titulo = if ($c['B']) { ([string]$c['B']).Trim() } else { '' }
   if (-not $titulo -or $titulo -eq 'TITULO') { continue }
+  # la columna A del Excel trae el articulo del titulo ("El", "La", "Los"...)
+  $articulo = if ($c['A']) { ([string]$c['A']).Trim() } else { '' }
+  if ($articulo -and $articulo -ne 'ARTICULO' -and $titulo -notmatch '^(?i)(el|la|los|las|un|una|the)\s') {
+    $titulo = $articulo + ' ' + $titulo
+    $articulosExcel++
+  }
   $estadoRaw = if ($c['H']) { ([string]$c['H']).Trim() } else { '' }
   if ($estadoRaw -eq 'ESTADO') { continue }
   $estado = switch -Regex ($estadoRaw) {
@@ -223,7 +230,7 @@ foreach ($f in $filas) {
   }
   [void]$libros.Add([pscustomobject]$registro)
 }
-Escribir ("  libros validos: {0}" -f $libros.Count)
+Escribir ("  libros validos: {0}   (con articulo de la columna A: {1})" -f $libros.Count, $articulosExcel)
 
 # ---------------------------------------------------------------- archivos
 Escribir "Indexando archivos..."
@@ -268,21 +275,21 @@ foreach ($l in $libros) {
   foreach ($k in (Claves $l.titulo)) {
     if (-not $porClave.ContainsKey($k)) { $porClave[$k] = @() }
     if ($l -notin $porClave[$k]) { $porClave[$k] += $l }
-    break   # solo la primera clave (la canonica) para agrupar
   }
 }
 
 $usados = @{}
 $conPortada = 0
 foreach ($l in $libros) {
-  $clavesLibro = @(Claves $l.titulo)
-  $k = $clavesLibro[0]
-  if (-not $grupos.ContainsKey($k)) { continue }
+  $k = ''
+  foreach ($clave in (Claves $l.titulo)) { if ($grupos.ContainsKey($clave)) { $k = $clave; break } }
+  if (-not $k) { continue }
   $letras = @($grupos[$k].Keys | Sort-Object)
   $companeros = $porClave[$k]
   $indice = [array]::IndexOf($companeros, $l)
+  if ($indice -lt 0) { $indice = 0 }
   $letraAsignada = ''
-  if ($letras.Count -ge ($indice + 1) -and $indice -ge 0) { $letraAsignada = $letras[$indice] }
+  if ($letras.Count -ge ($indice + 1)) { $letraAsignada = $letras[$indice] }
   elseif ($indice -ge $letras.Count) { $letraAsignada = $letras[-1] }
   $g = $grupos[$k][$letraAsignada]
   if (-not $g) { continue }
