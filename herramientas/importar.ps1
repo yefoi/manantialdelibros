@@ -52,6 +52,26 @@ function FechaExcel([string]$v) {
   return $v
 }
 
+function ArreglarTitulo([string]$titulo, [string]$archivo) {
+  # El listado del Excel escribe los titulos por la palabra significativa
+  # ("alcalde de Zalamea"); los nombres de archivo llevan el articulo al final
+  # ("alcalde de zalamea, el 01.jpg"). Aqui se reconstruye el titulo completo.
+  $t = ([string]$titulo).Trim()
+  if (-not $t) { return $t }
+  if ($archivo) {
+    $base = [IO.Path]::GetFileNameWithoutExtension($archivo)
+    $base = $base -replace '\s*\(\s*[IVX]+\s*\)\s*$', ''
+    $base = [regex]::Replace($base, '\s+0?[123]\s*[a-z]?\s*$', '')
+    $m = [regex]::Match($base, ',\s*(el|la|los|las|un|una)\s*$', 'IgnoreCase')
+    if ($m.Success -and $t -notmatch '^(?i)(el|la|los|las|un|una)\s') {
+      $art = $m.Groups[1].Value.ToLowerInvariant()
+      $t = $art.Substring(0, 1).ToUpperInvariant() + $art.Substring(1) + ' ' + $t
+    }
+  }
+  if ($t -cmatch '^[a-záéíóúñü]') { $t = $t.Substring(0, 1).ToUpperInvariant() + $t.Substring(1) }
+  return $t
+}
+
 function LeerDocx([string]$ruta, [string]$nombreArchivo) {
   $zip = [System.IO.Compression.ZipFile]::OpenRead($ruta)
   try {
@@ -406,12 +426,29 @@ foreach ($entrada in ($gruposLibres2.Values | Sort-Object { $_.G.nombre })) {
 }
 Escribir ("  fichas nuevas desde archivos: {0}" -f $extra)
 
+# ------------------------------------------------- titulos del listado
+Escribir "Reconstruyendo titulos (articulo del nombre del archivo + mayuscula inicial)..."
+$correcciones = New-Object Collections.ArrayList
+foreach ($l in $libros) {
+  $archivo = @(@($l.portadas) + @($l.contraportadas) + @($l.infoArchivo)) | Where-Object { $_ } | Select-Object -First 1
+  $antes = $l.titulo
+  $despues = ArreglarTitulo $l.titulo $archivo
+  if ($despues -cne $antes) {
+    $l.titulo = $despues
+    [void]$correcciones.Add(("{0,-8} {1}   ->   {2}" -f $l.id, $antes, $despues))
+  }
+}
+Escribir ("  titulos corregidos: {0}" -f $correcciones.Count)
+
 # ------------------------------------------------------------- revision
 $informe = New-Object Collections.ArrayList
 [void]$informe.Add("# Revision de la importacion - $(Get-Date -Format 'yyyy-MM-dd HH:mm')")
 [void]$informe.Add("")
 [void]$informe.Add("## Emparejados por similitud (revisar que el libro sea el correcto)")
 if ($sugerencias.Count) { foreach ($s in $sugerencias) { [void]$informe.Add("  $s") } } else { [void]$informe.Add("  (ninguno)") }
+[void]$informe.Add("")
+[void]$informe.Add("## Titulos reconstruidos (articulo recuperado del nombre del archivo)")
+if ($correcciones.Count) { foreach ($c in $correcciones) { [void]$informe.Add("  $c") } } else { [void]$informe.Add("  (ninguno)") }
 [void]$informe.Add("")
 [void]$informe.Add("## Archivos sin asignar a ningun libro")
 $resto = @()
