@@ -1,0 +1,90 @@
+﻿=======================================================================
+  MANANTIAL DE LIBROS
+  Biblioteca comunitaria de Refugio Koiné
+=======================================================================
+
+Qué es esto
+------------
+Un sitio web para consultar la biblioteca de Manantial de Libros.
+Muestra los libros del listado (Excel) y las fotos e información de la
+carpeta "libros FINAL".
+
+  · Las personas invitadas solo pueden VER los libros y su información.
+  · Los socios, entrando con el usuario y la contraseña, pueden:
+      - cambiar el estado de cada libro (Disponible / Prestado / Donado)
+      - subir portada, contraportada e información (.docx, .txt, .pdf)
+      - editar la ficha (título, autor, editorial, categoría, sinopsis…)
+      - añadir libros nuevos que lleguen a la biblioteca
+
+
+Cómo se enciende
+-----------------
+1. Doble clic en:      "Iniciar Manantial de Libros.bat"
+2. Se abre solo el navegador en  http://localhost:8080
+3. Para pararlo, cierra la ventana negra (o pulsa Ctrl+C).
+
+
+Cómo se entra desde móviles u otros ordenadores (wifi del local)
+----------------------------------------------------------------
+La primera vez hay que abrir el puerto en el firewall de Windows:
+      doble clic en "Permitir acceso desde la red (una vez).bat"
+      (pedirá permiso de administrador; hay que aceptarlo)
+
+Después, desde el móvil, escribe en el navegador la dirección que
+aparece en la ventana negra, por ejemplo:   http://192.168.1.50:8080
+El ordenador y el móvil tienen que estar en la misma red wifi.
+
+
+Usuario y contraseña
+---------------------
+  Usuario:      koine          <- el usuario de Refugio Koiné
+  Contraseña:   refugio        <- CAMBIARLA la primera vez
+
+Para cambiarla: entra en el sitio, pulsa "Ajustes" (arriba a la
+derecha) y pon la contraseña actual y la nueva. Todos los socios usan
+ese mismo usuario y contraseña.
+
+
+Actualizar el catálogo desde el Excel
+--------------------------------------
+Si cambia el listado del Excel (o se añaden fotos a "libros FINAL"):
+   1. Sustituye el Excel y/o añade las fotos en su carpeta.
+   2. Ejecuta:   herramientas\importar.ps1   (clic derecho > Ejecutar con PowerShell)
+   3. Ejecuta:   herramientas\miniaturas.ps1  (crea las miniaturas nuevas)
+Los cambios hechos desde el sitio (estados, fotos subidas, fichas)
+NO se pierden: se guardan aparte, en la carpeta "datos".
+
+
+Copia de seguridad
+-------------------
+Todo lo importante está en la carpeta "datos":
+   · cambios.json       -> estados y fichas editadas desde el sitio
+   · nuevos.json        -> libros añadidos desde el sitio
+   · subidas\           -> fotos e información subidas desde el sitio
+   · ajustes.json       -> rutas del Excel y de las fotos
+   · acceso.json        -> usuario y contraseña
+
+Puedes copiar esa carpeta a un pendrive de vez en cuando, o ejecutar
+    herramientas\copia-seguridad.ps1
+que crea un ZIP con fecha dentro de la carpeta "copias".
+
+
+Estructura de carpetas
+-----------------------
+  app\            el servidor (no hace falta tocar nada)
+  web\            la página (diseño, colores, textos)
+  datos\          datos del catálogo y cambios hechos desde el sitio
+  herramientas\   importar el Excel, miniaturas, copias, firewall…
+  runtime\node\   Node.js portable (no hay que instalar nada)
+  Iniciar Manantial de Libros.bat
+
+
+Notas
+-----
+· El Excel NO se modifica nunca: es la fuente original. Los cambios del
+  sitio se guardan aparte y se aplican por encima.
+· Los archivos que aparecen fotografiados pero no estaban en el Excel
+  se han creado como fichas nuevas y llevan la etiqueta "Por completar".
+· Arranque automático al encender el PC (opcional):
+      herramientas\arranque-automatico.ps1
+=======================================================================

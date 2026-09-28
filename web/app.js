@@ -1,0 +1,554 @@
+/* =====================================================================
+   Manantial de Libros · aplicación del catálogo
+   ===================================================================== */
+(function () {
+  'use strict';
+
+  const $ = (sel, raiz) => (raiz || document).querySelector(sel);
+  const $$ = (sel, raiz) => Array.from((raiz || document).querySelectorAll(sel));
+  const LOTE = 60;
+
+  const estado = {
+    libros: [],
+    sesion: { logueado: false, usuario: '', clavePorDefecto: false },
+    filtros: { texto: '', estado: '', signatura: '', orden: 'titulo', soloPortada: false, porCompletar: false },
+    visibles: LOTE,
+    detalleId: null,
+    imagenActiva: 0
+  };
+
+  /* ------------------------------------------------------------ utilidades */
+  const norm = (s) => String(s == null ? '' : s)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+  const escap = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+  const sinArticulo = (t) => String(t || '').replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
+  const claveTitulo = (t) => norm(sinArticulo(t));
+  const urlMedia = (tipo, nombre) => '/media/' + tipo + '/' + encodeURIComponent(nombre);
+  const img = (nombre) => urlMedia('thumb', nombre === undefined ? '' : nombre);
+
+  const ETIQUETA_ESTADO = { Disponible: 'Disponible', Prestado: 'Prestado', Donado: 'Donado', '': 'Sin estado' };
+
+  function toast(texto, esError) {
+    const caja = $('#avisos');
+    const el = document.createElement('div');
+    el.className = 'toast' + (esError ? ' toast-error' : '');
+    el.textContent = texto;
+    caja.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, 2600);
+    setTimeout(() => el.remove(), 3000);
+  }
+
+  async function api(ruta, opciones) {
+    const res = await fetch(ruta, Object.assign({ headers: {} }, opciones));
+    let datos = null;
+    try { datos = await res.json(); } catch (e) { /* sin cuerpo */ }
+    if (!res.ok) throw new Error((datos && datos.error) || ('Error ' + res.status));
+    return datos;
+  }
+
+  /* ------------------------------------------------------------ tarjeta */
+  function tarjetaHTML(l) {
+    const portada = (l.portadas && l.portadas.length) ? l.portadas[0] : null;
+    const claseInsignia = 'insignia insignia-' + (l.estado || 'vacia');
+    const pie = [l.signatura, l.estanteria ? 'Estantería ' + l.estanteria + (l.balda ? ' · ' + l.balda : '') : '']
+      .filter(Boolean).join(' · ');
+    return `
+      <button class="tarjeta" data-id="${escap(l.id)}" type="button">
+        <span class="tarjeta-portada">
+          ${portada
+            ? `<img src="${img(portada)}" alt="Portada de ${escap(l.titulo)}" loading="lazy"
+                 onerror="this.onerror=null;this.src='${urlMedia('img', portada)}'">`
+            : `<span class="tarjeta-sinPortada"><img src="/img/logo-libros.png" alt=""><small>Sin portada</small></span>`}
+          <span class="${claseInsignia}"><i></i>${escap(ETIQUETA_ESTADO[l.estado] || l.estado)}</span>
+          ${l.origen === 'nuevo' ? '<span class="insignia insignia-nuevo">Nuevo</span>'
+            : l.origen === 'carpeta' ? '<span class="insignia insignia-nuevo">Por completar</span>' : ''}
+        </span>
+        <span class="tarjeta-texto">
+          <span class="tarjeta-titulo">${escap(l.titulo)}</span>
+          ${l.autor ? `<span class="tarjeta-autor">${escap(l.autor)}</span>` : ''}
+          ${pie ? `<span class="tarjeta-pie">${escap(pie)}</span>` : ''}
+        </span>
+      </button>`;
+  }
+
+  /* ------------------------------------------------------------ filtrado */
+  function filtra() {
+    const f = estado.filtros;
+    const texto = norm(f.texto);
+    const palabras = texto ? texto.split(/\s+/) : [];
+    let lista = estado.libros.filter((l) => {
+      if (f.estado && (l.estado || '') !== f.estado) return false;
+      if (f.signatura && (l.signatura || '') !== f.signatura) return false;
+      if (f.soloPortada && !(l.portadas && l.portadas.length)) return false;
+      if (f.porCompletar && l.origen !== 'carpeta') return false;
+      if (palabras.length) {
+        const pajar = norm([l.titulo, l.autor, l.editorial, l.sinopsis, l.signatura, l.estanteria, l.balda, l.observaciones].join(' '));
+        for (const p of palabras) if (!pajar.includes(p)) return false;
+      }
+      return true;
+    });
+
+    const cmp = {
+      titulo: (a, b) => claveTitulo(a.titulo).localeCompare(claveTitulo(b.titulo), 'es'),
+      autor: (a, b) => String(a.autor || 'zzz').localeCompare(String(b.autor || 'zzz'), 'es'),
+      listado: () => 0,
+      recientes: (a, b) => String(b.creado || b.fechaEntrada || '').localeCompare(String(a.creado || a.fechaEntrada || ''))
+    }[f.orden];
+    if (cmp) lista.sort(cmp);
+    return lista;
+  }
+
+  function pintar(desdeCero) {
+    if (desdeCero) estado.visibles = LOTE;
+    const lista = filtra();
+    const trozo = lista.slice(0, estado.visibles);
+    $('#rejilla').innerHTML = trozo.map(tarjetaHTML).join('');
+    $('#vacio').hidden = lista.length > 0;
+    $('#btnMas').hidden = lista.length <= estado.visibles;
+    $('#contador').textContent = lista.length
+      ? lista.length.toLocaleString('es-ES') + (lista.length === 1 ? ' libro' : ' libros')
+        + (lista.length > estado.visibles ? ' · mostrando ' + trozo.length : '')
+      : '';
+  }
+
+  function pintarFranja() {
+    const pendientes = estado.libros.filter((l) => l.origen === 'carpeta').length;
+    const franja = $('#franja');
+    if (!pendientes) { franja.hidden = true; return; }
+    franja.hidden = false;
+    $('#franjaTexto').textContent =
+      'Hay ' + pendientes + ' libros que estaban fotografiados pero no aparecían en el listado del Excel, así que se crearon como fichas nuevas. Revísalas y complétalas cuando puedas.';
+    $('#btnPorCompletar').textContent = estado.filtros.porCompletar ? 'Ver todo el catálogo' : 'Ver solo esas fichas';
+    $('#btnPorCompletar').classList.toggle('boton-principal', estado.filtros.porCompletar);
+  }
+
+  function pintarPortadaDatos() {
+    const libs = estado.libros;
+    const cuenta = (e) => libs.filter((l) => l.estado === e).length;
+    const conPortada = libs.filter((l) => l.portadas && l.portadas.length).length;
+    $('#datosPortada').innerHTML =
+      '<b>' + libs.length.toLocaleString('es-ES') + '</b> libros en el catálogo · ' +
+      '<b>' + cuenta('Disponible').toLocaleString('es-ES') + '</b> disponibles · ' +
+      '<b>' + cuenta('Donado').toLocaleString('es-ES') + '</b> donados · ' +
+      '<b>' + conPortada.toLocaleString('es-ES') + '</b> con portada';
+    $('#pieNota').textContent = 'Catálogo con ' + libs.length.toLocaleString('es-ES') + ' libros. Los socios pueden actualizar estados y subir portadas e información.';
+  }
+
+  function pintarFiltrosCategoria() {
+    const conteo = new Map();
+    for (const l of estado.libros) {
+      const s = l.signatura || '';
+      if (!s) continue;
+      conteo.set(s, (conteo.get(s) || 0) + 1);
+    }
+    const opciones = Array.from(conteo.entries()).sort((a, b) => b[1] - a[1]);
+    $('#selSignatura').innerHTML = '<option value="">Todas las categorías</option>' +
+      opciones.map(([s, n]) => `<option value="${escap(s)}">${escap(s)} (${n})</option>`).join('');
+    $('#listaSignaturas').innerHTML = opciones.map(([s]) => `<option value="${escap(s)}">`).join('');
+  }
+
+  /* ------------------------------------------------------------ detalle */
+  function imagenesDe(l) {
+    const lista = [];
+    for (const n of (l.portadas || [])) lista.push({ nombre: n, tipo: 'Portada' });
+    for (const n of (l.contraportadas || [])) lista.push({ nombre: n, tipo: 'Contraportada' });
+    return lista;
+  }
+
+  function abrirDetalle(id) {
+    const l = estado.libros.find((x) => x.id === id);
+    if (!l) return;
+    estado.detalleId = id;
+    estado.imagenActiva = 0;
+    pintarDetalle();
+    const panel = $('#panelDetalle');
+    if (!panel.open) panel.showModal();
+    if (location.hash !== '#libro/' + id) history.replaceState(null, '', '#libro/' + id);
+  }
+
+  function cerrarDetalle() {
+    const panel = $('#panelDetalle');
+    if (panel.open) panel.close();
+    estado.detalleId = null;
+    if (location.hash) history.replaceState(null, '', location.pathname);
+  }
+
+  function pintarDetalle() {
+    const l = estado.libros.find((x) => x.id === estado.detalleId);
+    if (!l) return;
+    const imagenes = imagenesDe(l);
+    const activa = imagenes[estado.imagenActiva] || imagenes[0];
+    const socio = estado.sesion.logueado;
+
+    const meta = [
+      l.autor ? ['Autor', l.autor] : null,
+      l.editorial ? ['Editorial', l.editorial] : null,
+      l.signatura ? ['Categoría', l.signatura] : null,
+      l.estanteria ? ['Ubicación', 'Estantería ' + l.estanteria + (l.balda ? ' · balda ' + l.balda : '')] : null,
+      l.paginas ? ['Páginas', l.paginas] : null,
+      l.genero ? ['Género', l.genero] : null,
+      l.fechaEntrada ? ['Entrada', l.fechaEntrada] : null,
+      l.fechaSalida && l.estado === 'Donado' ? ['Donado el', l.fechaSalida] : null
+    ].filter(Boolean);
+
+    $('#detEtiqueta').textContent = (l.origen === 'listado' ? 'Ficha del listado' : l.origen === 'nuevo' ? 'Añadido por los socios' : 'Por completar') +
+      (l.fila ? ' · línea ' + l.fila : '');
+
+    $('#detCuerpo').innerHTML = `
+      <div class="detalle">
+        <div class="detalle-imagenes">
+          <div class="detalle-principal">
+            ${activa
+              ? `<img id="detImagen" src="${urlMedia('img', activa.nombre)}" alt="${escap(activa.tipo)} de ${escap(l.titulo)}"
+                   onerror="this.onerror=null;this.src='${img(activa.nombre)}'">`
+              : `<span class="tarjeta-sinPortada"><img src="/img/logo-libros.png" alt=""><small>Sin imágenes</small></span>`}
+          </div>
+          <div class="detalle-miniaturas" id="detMiniaturas">
+            ${imagenes.map((im, i) => `
+              <button class="${i === estado.imagenActiva ? 'activa' : ''}" data-indice="${i}" title="${escap(im.tipo)}">
+                <img src="${img(im.nombre)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${urlMedia('img', im.nombre)}'">
+                ${socio ? `<span class="quitar" data-quitar="${escap(im.nombre)}" title="Quitar imagen">×</span>` : ''}
+              </button>`).join('')}
+          </div>
+          <p class="nota">${imagenes.length ? imagenes.length + ' imagen(es) disponibles' : 'Este libro todavía no tiene foto'}</p>
+        </div>
+
+        <div class="detalle-info">
+          <h2>${escap(l.titulo)}</h2>
+          ${l.autor ? `<p class="detalle-autor">${escap(l.autor)}</p>` : ''}
+          <p class="estado-linea"><span class="insignia insignia-${l.estado || 'vacia'}"><i></i>${escap(ETIQUETA_ESTADO[l.estado] || l.estado)}</span></p>
+
+          ${meta.length ? `<dl class="detalle-meta">${meta.map(([k, v]) => `<div><dt>${escap(k)}</dt><dd>${escap(v)}</dd></div>`).join('')}</dl>` : ''}
+          ${l.sinopsis ? `<p class="detalle-sinopsis">${escap(l.sinopsis)}</p>` : '<p class="detalle-sinopsis nota">Sin sinopsis todavía.</p>'}
+          ${l.observaciones ? `<p class="detalle-observaciones">${escap(l.observaciones)}</p>` : ''}
+          ${l.infoArchivo ? `<a class="enlace-doc" href="${urlMedia('doc', l.infoArchivo)}" target="_blank" rel="noopener">Ver la ficha original (${escap(l.infoArchivo)})</a>` : ''}
+
+          <div class="detalle-seccion solo-socios-detalle">
+            <h3>Cambiar el estado</h3>
+            <div class="estados">
+              ${['Disponible', 'Prestado', 'Donado'].map((e) =>
+                `<button data-estado="${e}" class="${l.estado === e ? 'activo' : ''}"><i class="punto punto-${e.toLowerCase()}"></i>${e}</button>`).join('')}
+            </div>
+          </div>
+
+          <div class="detalle-seccion solo-socios-detalle">
+            <h3>Portadas e información</h3>
+            <div class="detalle-acciones">
+              <label class="boton boton-contorno">Cambiar portada
+                <input type="file" accept="image/*" data-subir="portada" hidden></label>
+              <label class="boton boton-contorno">Añadir contraportada
+                <input type="file" accept="image/*" data-subir="contraportada" hidden></label>
+              <label class="boton boton-contorno">Subir info (.docx, .txt, .pdf)
+                <input type="file" accept=".docx,.doc,.txt,.md,.pdf,application/pdf" data-subir="info" hidden></label>
+              <button class="boton boton-contorno" id="btnEditarFicha">Editar ficha</button>
+            </div>
+            <div id="editorFicha" hidden></div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function editorFicha(l) {
+    return `
+      <form class="formulario" id="formEditar" style="margin-top:16px">
+        <div class="formulario-rejilla">
+          <label class="campo ancho"><span>Título</span><input type="text" name="titulo" value="${escap(l.titulo)}"></label>
+          <label class="campo"><span>Autor</span><input type="text" name="autor" value="${escap(l.autor || '')}"></label>
+          <label class="campo"><span>Editorial</span><input type="text" name="editorial" value="${escap(l.editorial || '')}"></label>
+          <label class="campo"><span>Categoría</span><input type="text" name="signatura" value="${escap(l.signatura || '')}" list="listaSignaturas"></label>
+          <label class="campo"><span>Estantería</span><input type="text" name="estanteria" value="${escap(l.estanteria || '')}"></label>
+          <label class="campo"><span>Balda</span><input type="text" name="balda" value="${escap(l.balda || '')}"></label>
+          <label class="campo"><span>Páginas</span><input type="text" name="paginas" value="${escap(l.paginas || '')}"></label>
+          <label class="campo ancho"><span>Sinopsis</span><textarea name="sinopsis" rows="5">${escap(l.sinopsis || '')}</textarea></label>
+          <label class="campo ancho"><span>Observaciones</span><input type="text" name="observaciones" value="${escap(l.observaciones || '')}"></label>
+        </div>
+        <p class="error" id="editarError" hidden></p>
+        <div class="formulario-acciones">
+          <button class="boton boton-peligro" type="button" id="btnBorrarLibro" hidden>Eliminar del catálogo</button>
+          <button class="boton boton-contorno" type="button" id="btnCancelarEdicion">Cancelar</button>
+          <button class="boton boton-principal" type="submit">Guardar</button>
+        </div>
+      </form>`;
+  }
+
+  async function guardarLibro(id, campos) {
+    const res = await api('/api/libros/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(campos)
+    });
+    const i = estado.libros.findIndex((x) => x.id === id);
+    if (i >= 0 && res.libro) estado.libros[i] = Object.assign(estado.libros[i], res.libro);
+    return res.libro;
+  }
+
+  async function subirArchivo(id, tipo, archivo) {
+    const fd = new FormData();
+    fd.append('tipo', tipo);
+    fd.append('archivo', archivo, archivo.name);
+    const res = await api('/api/libros/' + encodeURIComponent(id) + '/media', { method: 'POST', body: fd });
+    const i = estado.libros.findIndex((x) => x.id === id);
+    if (i >= 0 && res.libro) estado.libros[i] = Object.assign(estado.libros[i], res.libro);
+    return res.libro;
+  }
+
+  /* ------------------------------------------------------------ sesión */
+  function pintarSesion() {
+    const s = estado.sesion;
+    document.body.classList.toggle('socio', s.logueado);
+    $('#btnAcceso').textContent = s.logueado ? (s.usuario || 'Socio') : 'Entrar';
+    $('#btnNuevoLibro').hidden = !s.logueado;
+    $('#btnAjustes').hidden = !s.logueado;
+    $('#avisoClave').hidden = !s.clavePorDefecto;
+    $('#ajusteUsuario').value = s.usuario || '';
+  }
+
+  /* ------------------------------------------------------------ arranque */
+  async function cargarSesion() {
+    try { estado.sesion = await api('/api/estado'); } catch (e) { /* sin conexion */ }
+    pintarSesion();
+  }
+
+  async function cargarLibros() {
+    const datos = await api('/api/libros');
+    estado.libros = datos.libros || [];
+    pintarPortadaDatos();
+    pintarFiltrosCategoria();
+    pintar(true);
+    pintarFranja();
+  }
+
+  /* ------------------------------------------------------------ eventos */
+  function conectar() {
+    $('#formBuscador').addEventListener('submit', (e) => e.preventDefault());
+    let temporizador;
+    $('#campoBuscar').addEventListener('input', (e) => {
+      const v = e.target.value;
+      $('#btnLimpiar').hidden = !v;
+      clearTimeout(temporizador);
+      temporizador = setTimeout(() => { estado.filtros.texto = v; pintar(true); }, 140);
+    });
+    $('#btnLimpiar').addEventListener('click', () => {
+      $('#campoBuscar').value = '';
+      $('#btnLimpiar').hidden = true;
+      estado.filtros.texto = '';
+      pintar(true);
+      $('#campoBuscar').focus();
+    });
+    $('#formBuscador').addEventListener('submit', () => { });
+
+    $$('.pildora').forEach((p) => p.addEventListener('click', () => {
+      $$('.pildora').forEach((x) => x.classList.toggle('activa', x === p));
+      estado.filtros.estado = p.dataset.estado;
+      pintar(true);
+    }));
+    $('#selSignatura').addEventListener('change', (e) => { estado.filtros.signatura = e.target.value; pintar(true); });
+    $('#selOrden').addEventListener('change', (e) => { estado.filtros.orden = e.target.value; pintar(true); });
+    $('#chkPortada').addEventListener('change', (e) => { estado.filtros.soloPortada = e.target.checked; pintar(true); });
+    $('#btnMas').addEventListener('click', () => { estado.visibles += LOTE; pintar(false); });
+
+    document.addEventListener('click', (e) => {
+      const t = e.target.closest('.tarjeta');
+      if (t) { abrirDetalle(t.dataset.id); return; }
+    });
+
+    $('#btnPorCompletar').addEventListener('click', () => {
+      estado.filtros.porCompletar = !estado.filtros.porCompletar;
+      pintarFranja();
+      pintar(true);
+      $('#rejilla').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    $('#btnCerrarDetalle').addEventListener('click', cerrarDetalle);
+    $('#panelDetalle').addEventListener('close', () => {
+      estado.detalleId = null;
+      if (location.hash) history.replaceState(null, '', location.pathname);
+    });
+    $('#panelDetalle').addEventListener('click', (e) => {
+      if (e.target === $('#panelDetalle')) cerrarDetalle();
+    });
+
+    // galería + acciones de la ficha
+    $('#detCuerpo').addEventListener('click', async (e) => {
+      const l = estado.libros.find((x) => x.id === estado.detalleId);
+      if (!l) return;
+
+      const mini = e.target.closest('[data-indice]');
+      if (mini) { estado.imagenActiva = Number(mini.dataset.indice); pintarDetalle(); return; }
+
+      const quitar = e.target.closest('[data-quitar]');
+      if (quitar) {
+        e.preventDefault(); e.stopPropagation();
+        if (!confirm('¿Quitar la imagen «' + quitar.dataset.quitar + '» de esta ficha?')) return;
+        try {
+          const res = await api('/api/libros/' + encodeURIComponent(l.id) + '/media?archivo=' + encodeURIComponent(quitar.dataset.quitar), { method: 'DELETE' });
+          Object.assign(l, res.libro); estado.imagenActiva = 0; pintarDetalle(); pintar(false);
+          toast('Imagen quitada');
+        } catch (err) { toast(err.message, true); }
+        return;
+      }
+
+      const botonEstado = e.target.closest('.estados button');
+      if (botonEstado) {
+        try { await guardarLibro(l.id, { estado: botonEstado.dataset.estado }); pintarDetalle(); pintar(false); toast('Estado: ' + botonEstado.dataset.estado); }
+        catch (err) { toast(err.message, true); }
+        return;
+      }
+
+      if (e.target.closest('#btnEditarFicha')) {
+        $('#editorFicha').innerHTML = editorFicha(l);
+        $('#editorFicha').hidden = false;
+        $('#btnEditarFicha').hidden = true;
+        $('#btnBorrarLibro').hidden = l.origen !== 'nuevo';
+        return;
+      }
+      if (e.target.closest('#btnCancelarEdicion')) {
+        $('#editorFicha').hidden = true; $('#editorFicha').innerHTML = '';
+        $('#btnEditarFicha').hidden = false;
+        return;
+      }
+      if (e.target.closest('#btnBorrarLibro')) {
+        if (!confirm('¿Eliminar «' + l.titulo + '» del catálogo? Esta acción no se puede deshacer.')) return;
+        try {
+          await api('/api/libros/' + encodeURIComponent(l.id), { method: 'DELETE' });
+          estado.libros = estado.libros.filter((x) => x.id !== l.id);
+          cerrarDetalle(); pintar(false); pintarPortadaDatos();
+          toast('Libro eliminado');
+        } catch (err) { toast(err.message, true); }
+        return;
+      }
+    });
+
+    // guardar el editor de ficha
+    $('#detCuerpo').addEventListener('submit', async (e) => {
+      if (e.target.id !== 'formEditar') return;
+      e.preventDefault();
+      const l = estado.libros.find((x) => x.id === estado.detalleId);
+      if (!l) return;
+      const datos = new FormData(e.target);
+      const campos = {};
+      datos.forEach((v, k) => { campos[k] = String(v); });
+      try {
+        await guardarLibro(l.id, campos);
+        $('#editorFicha').hidden = true; $('#editorFicha').innerHTML = '';
+        $('#btnEditarFicha').hidden = false;
+        pintarDetalle(); pintar(false); pintarPortadaDatos();
+        toast('Ficha guardada');
+      } catch (err) {
+        const err1 = $('#editarError'); err1.textContent = err.message; err1.hidden = false;
+      }
+    });
+
+    // subidas
+    $('#detCuerpo').addEventListener('change', async (e) => {
+      const input = e.target.closest('[data-subir]');
+      if (!input || !input.files || !input.files.length) return;
+      const l = estado.libros.find((x) => x.id === estado.detalleId);
+      const tipo = input.dataset.subir;
+      const archivo = input.files[0];
+      if (archivo.size > 30 * 1024 * 1024) { toast('El archivo es demasiado grande (máx. 30 MB)', true); input.value = ''; return; }
+      toast('Subiendo ' + tipo + '…');
+      try {
+        await subirArchivo(l.id, tipo, archivo);
+        estado.imagenActiva = 0;
+        pintarDetalle(); pintar(false); pintarPortadaDatos();
+        toast('Listo: ' + tipo + ' actualizada');
+      } catch (err) { toast(err.message, true); }
+      input.value = '';
+    });
+
+    // acceso
+    $('#btnAcceso').addEventListener('click', () => {
+      if (estado.sesion.logueado) { $('#panelAjustes').showModal(); $('#ajusteActual').focus(); return; }
+      $('#panelAcceso').showModal();
+      $('#accesoUsuario').value = 'koine';
+      $('#accesoClave').value = '';
+      setTimeout(() => $('#accesoClave').focus(), 50);
+    });
+    $('#formAcceso').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = $('#accesoError');
+      err.hidden = true;
+      try {
+        await api('/api/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario: $('#accesoUsuario').value, clave: $('#accesoClave').value })
+        });
+        $('#panelAcceso').close();
+        await cargarSesion();
+        if (estado.detalleId) pintarDetalle();
+        toast('Bienvenido/a, ' + (estado.sesion.usuario || ''));
+      } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    });
+
+    // ajustes
+    $('#formAjustes').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = $('#ajusteError');
+      err.hidden = true;
+      try {
+        await api('/api/clave', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario: $('#ajusteUsuario').value, actual: $('#ajusteActual').value, nueva: $('#ajusteNueva').value })
+        });
+        $('#panelAjustes').close();
+        $('#ajusteActual').value = ''; $('#ajusteNueva').value = '';
+        await cargarSesion();
+        toast('Contraseña actualizada');
+      } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    });
+    $('#btnSalir').addEventListener('click', async () => {
+      await api('/api/logout', { method: 'POST' });
+      $('#panelAjustes').close();
+      await cargarSesion();
+      if (estado.detalleId) pintarDetalle();
+      toast('Sesión cerrada');
+    });
+
+    // libro nuevo
+    $('#btnNuevoLibro').addEventListener('click', () => $('#panelNuevo').showModal());
+    $('#formNuevo').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = $('#nuevoError');
+      err.hidden = true;
+      const campos = {
+        titulo: $('#nuevoTitulo').value, autor: $('#nuevoAutor').value, editorial: $('#nuevoEditorial').value,
+        signatura: $('#nuevoSignatura').value, estanteria: $('#nuevoEstanteria').value, balda: $('#nuevoBalda').value,
+        estado: $('#nuevoEstado').value, sinopsis: $('#nuevoSinopsis').value, observaciones: $('#nuevoObservaciones').value
+      };
+      try {
+        const res = await api('/api/libros', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(campos) });
+        estado.libros.push(res.libro);
+        $('#panelNuevo').close();
+        e.target.reset();
+        pintar(false); pintarPortadaDatos(); pintarFiltrosCategoria();
+        toast('Libro añadido');
+        abrirDetalle(res.libro.id);
+      } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    });
+
+    $$('[data-cerrar]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
+    $$('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && $('#panelDetalle').open) cerrarDetalle();
+      if (e.key === '/' && document.activeElement !== $('#campoBuscar')) { e.preventDefault(); $('#campoBuscar').focus(); }
+    });
+    window.addEventListener('hashchange', () => {
+      const m = /^#libro\/(.+)$/.exec(location.hash);
+      if (m) abrirDetalle(decodeURIComponent(m[1]));
+    });
+  }
+
+  /* ------------------------------------------------------------ inicio */
+  (async function iniciar() {
+    conectar();
+    await cargarSesion();
+    try { await cargarLibros(); } catch (e) { toast('No se pudo cargar el catálogo: ' + e.message, true); }
+    const m = /^#libro\/(.+)$/.exec(location.hash);
+    if (m) abrirDetalle(decodeURIComponent(m[1]));
+  })();
+})();

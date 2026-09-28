@@ -1,0 +1,28 @@
+# ---------------------------------------------------------------------
+#  Manantial de Libros - archivos que NO se suben al repositorio
+# ---------------------------------------------------------------------
+
+# Node.js portable (se descarga con herramientas\instalar-node.ps1)
+runtime/
+
+# Datos privados / generados en este ordenador
+datos/acceso.json
+datos/ajustes.json
+datos/cambios.json
+datos/nuevos.json
+datos/biblioteca.json
+datos/estadisticas.json
+datos/registro.log
+datos/revision.txt
+datos/sin_usar.txt
+datos/miniaturas/
+datos/subidas/
+
+# Copias de seguridad
+copias/
+
+# Basura de Windows
+Thumbs.db
+desktop.ini
+~$*
+*.tmp

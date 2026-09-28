@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manantial de Libros · Biblioteca</title>
+<meta name="description" content="Biblioteca comunitaria Manantial de Libros: consulta qué libros están disponibles, prestados o donados.">
+<meta name="theme-color" content="#F6F2EA">
+<link rel="icon" href="/icono.ico" sizes="any">
+<link rel="apple-touch-icon" href="/img/icono-180.png">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="cabecera">
+  <a class="marca" href="#">
+    <img class="marca-logo" src="/img/logo-libros.png" alt="Manantial de Libros" width="38" height="38">
+    <span class="marca-texto">Manantial de Libros</span>
+  </a>
+  <div class="cabecera-derecha">
+    <a class="fundacion" href="https://www.fundacionmanantial.org" target="_blank" rel="noopener"
+       title="Manantial de Libros es una biblioteca de Fundación Manantial">
+      <svg class="fundacion-m" viewBox="0 0 100 100" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="15" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M25 76V22"/><path d="M25 22 46 50"/><path d="M54 57 75 22"/><path d="M75 22v54"/>
+        </g>
+      </svg>
+      <span class="fundacion-texto"><small>Fundación</small><strong>Manantial</strong></span>
+    </a>
+    <nav class="cabecera-acciones">
+      <button class="boton boton-fantasma solo-socios" id="btnNuevoLibro" hidden>Añadir libro</button>
+      <button class="boton boton-fantasma solo-socios" id="btnAjustes" hidden>Ajustes</button>
+      <button class="boton boton-principal" id="btnAcceso">Entrar</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="portada">
+    <img class="portada-logo" src="/img/logo-libros.png" alt="" width="124" height="124">
+    <p class="portada-antetitulo">Biblioteca comunitaria</p>
+    <h1>Manantial de Libros</h1>
+    <p class="portada-lema">Un manantial de lecturas para quien busca un refugio.<br>
+      Consulta qué hay disponible en las estanterías, qué se ha prestado y qué se ha donado.</p>
+    <form class="buscador" id="formBuscador" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      <input type="search" id="campoBuscar" placeholder="Buscar por título, autor, editorial o sinopsis…" autocomplete="off" aria-label="Buscar libros">
+      <button type="button" class="limpiar" id="btnLimpiar" hidden aria-label="Borrar búsqueda">×</button>
+    </form>
+    <p class="portada-datos" id="datosPortada"></p>
+  </section>
+
+  <section class="barra-filtros">
+    <div class="filtros" role="group" aria-label="Filtrar por estado">
+      <button class="pildora activa" data-estado="">Todos</button>
+      <button class="pildora" data-estado="Disponible"><span class="punto punto-disponible"></span>Disponibles</button>
+      <button class="pildora" data-estado="Prestado"><span class="punto punto-prestado"></span>Prestados</button>
+      <button class="pildora" data-estado="Donado"><span class="punto punto-donado"></span>Donados</button>
+    </div>
+    <div class="filtros-secundarios">
+      <label class="campo">
+        <span>Categoría</span>
+        <select id="selSignatura"><option value="">Todas</option></select>
+      </label>
+      <label class="campo">
+        <span>Ordenar por</span>
+        <select id="selOrden">
+          <option value="titulo">Título (A–Z)</option>
+          <option value="autor">Autor (A–Z)</option>
+          <option value="listado">Orden del listado</option>
+          <option value="recientes">Añadidos recientemente</option>
+        </select>
+      </label>
+      <label class="campo campo-check">
+        <input type="checkbox" id="chkPortada">
+        <span>Solo con portada</span>
+      </label>
+    </div>
+  </section>
+
+  <section class="rejilla-zona">
+    <p class="contador" id="contador"></p>
+    <div class="rejilla" id="rejilla"></div>
+    <p class="vacio" id="vacio" hidden>No hay libros que coincidan con la búsqueda.</p>
+    <div class="mas-zona"><button class="boton boton-contorno" id="btnMas" hidden>Cargar más libros</button></div>
+  </section>
+
+  <section class="franja" id="franja" hidden>
+    <h2>Fichas por completar</h2>
+    <p><span id="franjaTexto"></span> <button class="boton boton-contorno" id="btnPorCompletar" type="button">Ver solo esas fichas</button></p>
+  </section>
+</main>
+
+<footer class="pie">
+  <div class="pie-marca">
+    <img src="/img/logo-libros.png" alt="" width="40" height="40">
+    <p>Manantial de Libros<br><span>Biblioteca comunitaria · Refugio Koiné</span></p>
+  </div>
+  <a class="pie-fundacion" href="https://www.fundacionmanantial.org" target="_blank" rel="noopener">
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <g fill="none" stroke="currentColor" stroke-width="15" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M25 76V22"/><path d="M25 22 46 50"/><path d="M54 57 75 22"/><path d="M75 22v54"/>
+      </g>
+    </svg>
+    Fundación Manantial
+  </a>
+  <p class="pie-nota" id="pieNota"></p>
+</footer>
+
+<!-- ------------------------------ ficha de libro ------------------------------ -->
+<dialog class="panel" id="panelDetalle">
+  <div class="panel-cabecera">
+    <p class="panel-etiqueta" id="detEtiqueta"></p>
+    <button class="cerrar" id="btnCerrarDetalle" aria-label="Cerrar">×</button>
+  </div>
+  <div class="panel-cuerpo" id="detCuerpo"></div>
+</dialog>
+
+<!-- ------------------------------ entrar ------------------------------ -->
+<dialog class="panel panel-pequeno" id="panelAcceso">
+  <div class="panel-cabecera">
+    <p class="panel-etiqueta">Acceso de socios</p>
+    <button class="cerrar" data-cerrar aria-label="Cerrar">×</button>
+  </div>
+  <form class="panel-cuerpo formulario" id="formAcceso">
+    <p class="ayuda">Entra con el usuario de la biblioteca para poder cambiar estados, subir portadas e información.</p>
+    <label class="campo ancho"><span>Usuario</span><input type="text" id="accesoUsuario" autocomplete="username" required></label>
+    <label class="campo ancho"><span>Contraseña</span><input type="password" id="accesoClave" autocomplete="current-password" required></label>
+    <p class="error" id="accesoError" hidden></p>
+    <div class="formulario-acciones"><button class="boton boton-principal" type="submit">Entrar</button></div>
+  </form>
+</dialog>
+
+<!-- ------------------------------ ajustes ------------------------------ -->
+<dialog class="panel panel-pequeno" id="panelAjustes">
+  <div class="panel-cabecera">
+    <p class="panel-etiqueta">Ajustes de la cuenta</p>
+    <button class="cerrar" data-cerrar aria-label="Cerrar">×</button>
+  </div>
+  <form class="panel-cuerpo formulario" id="formAjustes">
+    <p class="aviso" id="avisoClave" hidden>Estás usando la contraseña inicial. Cámbiala para que solo los socios puedan editar.</p>
+    <label class="campo ancho"><span>Usuario</span><input type="text" id="ajusteUsuario" autocomplete="username"></label>
+    <label class="campo ancho"><span>Contraseña actual</span><input type="password" id="ajusteActual" autocomplete="current-password"></label>
+    <label class="campo ancho"><span>Nueva contraseña</span><input type="password" id="ajusteNueva" autocomplete="new-password"></label>
+    <p class="error" id="ajusteError" hidden></p>
+    <div class="formulario-acciones">
+      <button class="boton boton-contorno" type="button" id="btnSalir">Cerrar sesión</button>
+      <button class="boton boton-principal" type="submit">Guardar cambios</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ------------------------------ libro nuevo ------------------------------ -->
+<dialog class="panel" id="panelNuevo">
+  <div class="panel-cabecera">
+    <p class="panel-etiqueta">Añadir un libro</p>
+    <button class="cerrar" data-cerrar aria-label="Cerrar">×</button>
+  </div>
+  <form class="panel-cuerpo formulario" id="formNuevo">
+    <div class="formulario-rejilla">
+      <label class="campo ancho"><span>Título *</span><input type="text" id="nuevoTitulo" required></label>
+      <label class="campo"><span>Autor</span><input type="text" id="nuevoAutor"></label>
+      <label class="campo"><span>Editorial</span><input type="text" id="nuevoEditorial"></label>
+      <label class="campo"><span>Categoría</span><input type="text" id="nuevoSignatura" list="listaSignaturas"></label>
+      <label class="campo"><span>Estantería</span><input type="text" id="nuevoEstanteria"></label>
+      <label class="campo"><span>Balda</span><input type="text" id="nuevoBalda"></label>
+      <label class="campo"><span>Estado</span>
+        <select id="nuevoEstado">
+          <option>Disponible</option><option>Prestado</option><option>Donado</option>
+        </select>
+      </label>
+      <label class="campo ancho"><span>Sinopsis</span><textarea id="nuevoSinopsis" rows="3"></textarea></label>
+      <label class="campo ancho"><span>Observaciones</span><input type="text" id="nuevoObservaciones"></label>
+    </div>
+    <p class="error" id="nuevoError" hidden></p>
+    <div class="formulario-acciones"><button class="boton boton-principal" type="submit">Guardar libro</button></div>
+  </form>
+</dialog>
+
+<datalist id="listaSignaturas"></datalist>
+<div class="avisos" id="avisos" aria-live="polite"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

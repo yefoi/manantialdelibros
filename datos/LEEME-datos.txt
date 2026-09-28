@@ -1,0 +1,18 @@
+En esta carpeta vive todo lo que el sitio guarda en este ordenador.
+
+  · acceso.json      usuario y contraseña del sitio (NO se sube al repositorio)
+  · ajustes.json     rutas del Excel y de la carpeta de fotos, y el puerto
+  · biblioteca.json  catálogo generado desde el Excel (se puede regenerar)
+  · cambios.json     estados y fichas editadas desde el sitio
+  · nuevos.json      libros añadidos desde el sitio
+  · subidas/         portadas, contraportadas e información subidas desde el sitio
+  · miniaturas/      copias pequeñas de las portadas, para que cargue rápido
+  · revision.txt     avisos de la última importación (para revisar a mano)
+
+Para regenerar biblioteca.json y miniaturas/ (por ejemplo, en otro ordenador):
+
+    herramientas\instalar-node.ps1     (solo la primera vez)
+    herramientas\importar.ps1          (lee el Excel y la carpeta de fotos)
+    herramientas\miniaturas.ps1
+
+Cambios y subidas NO se pierden al reimportar el Excel.
