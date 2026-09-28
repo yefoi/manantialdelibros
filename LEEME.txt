@@ -45,14 +45,26 @@ derecha) y pon la contraseña actual y la nueva. Todos los socios usan
 ese mismo usuario y contraseña.
 
 
-Actualizar el catálogo desde el Excel
---------------------------------------
-Si cambia el listado del Excel (o se añaden fotos a "libros FINAL"):
-   1. Sustituye el Excel y/o añade las fotos en su carpeta.
-   2. Ejecuta:   herramientas\importar.ps1   (clic derecho > Ejecutar con PowerShell)
-   3. Ejecuta:   herramientas\miniaturas.ps1  (crea las miniaturas nuevas)
+Actualizar el catálogo desde el Excel o las fotos
+-------------------------------------------------
+Es AUTOMÁTICO. Mientras el sitio está encendido, si:
+   · guardas el Excel, o
+   · añades, cambias o borras fotos de la carpeta "libros FINAL"
+el servidor lo detecta y vuelve a importar todo solo (tarda un minuto
+o dos). En los navegadores que estén abiertos aparece abajo un aviso:
+"El catálogo se ha actualizado", con un botón para refrescar la vista.
+
+Si quieres forzarlo en cualquier momento, desde el sitio:
+   Ajustes → "Actualizar el catálogo ahora"   (hay que entrar como socio)
+
+También se puede seguir haciendo a mano, sin el sitio encendido:
+   1. herramientas\importar.ps1
+   2. herramientas\miniaturas.ps1
 Los cambios hechos desde el sitio (estados, fotos subidas, fichas)
 NO se pierden: se guardan aparte, en la carpeta "datos".
+
+Para desactivar la vigilancia automática: en datos\ajustes.json pon
+   "vigilar": false
 
 
 Copia de seguridad

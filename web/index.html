@@ -143,6 +143,11 @@
     <label class="campo ancho"><span>Contraseña actual</span><input type="password" id="ajusteActual" autocomplete="current-password"></label>
     <label class="campo ancho"><span>Nueva contraseña</span><input type="password" id="ajusteNueva" autocomplete="new-password"></label>
     <p class="error" id="ajusteError" hidden></p>
+    <div class="detalle-seccion">
+      <h3>Catálogo</h3>
+      <p class="nota">Se actualiza solo cuando cambias el Excel o añades fotos a la carpeta. También puedes forzarlo ahora:</p>
+      <button class="boton boton-contorno" type="button" id="btnForzarCatalogo">Actualizar el catálogo ahora</button>
+    </div>
     <div class="formulario-acciones">
       <button class="boton boton-contorno" type="button" id="btnSalir">Cerrar sesión</button>
       <button class="boton boton-principal" type="submit">Guardar cambios</button>
@@ -178,6 +183,12 @@
 </dialog>
 
 <datalist id="listaSignaturas"></datalist>
+<div class="aviso-catalogo" id="avisoCatalogo" hidden>
+  <span class="aviso-catalogo-punto"></span>
+  <span id="avisoCatalogoTexto"></span>
+  <button class="boton boton-claro" id="btnActualizarVista" type="button" hidden>Actualizar</button>
+</div>
+
 <div class="avisos" id="avisos" aria-live="polite"></div>
 
 <script src="/app.js"></script>

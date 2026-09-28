@@ -110,10 +110,23 @@ acentos, filtros por estado y categoría, ficha con galería de imágenes y acci
 
 | Quiero… | Cómo |
 |---|---|
-| Actualizar el catálogo | sustituir el Excel / añadir fotos y ejecutar `herramientas\importar.ps1` + `miniaturas.ps1` |
+| Actualizar el catálogo | automático al guardar el Excel o cambiar las fotos (1–2 min); también `Ajustes → Actualizar el catálogo ahora` o `herramientas\importar.ps1` + `miniaturas.ps1` |
 | Copia de seguridad | `herramientas\copia-seguridad.ps1` (ZIP con fecha en `copias\`) |
 | Arrancar solo al encender el PC | `herramientas\arranque-automatico.ps1` (`-Quitar` para desactivar) |
 | Cambiar el puerto | editar `puerto` en `datos\ajustes.json` |
+
+## Actualización automática
+
+`app\server.js` vigila cada 10 segundos el Excel y la carpeta de fotos. Cuando detecta un cambio
+(con 7 segundos de margen para que termine de copiarse), reimporta el catálogo y regenera las
+miniaturas él solo, usando `herramientas\importar.ps1` y `herramientas\miniaturas.ps1`.
+El sitio sigue funcionando mientras tanto, y al terminar:
+
+- `/api/estado` publica la nueva `version` (la fecha de la última importación);
+- la web la compara cada 20 segundos y muestra un aviso para refrescar.
+
+Se puede desactivar con `"vigilar": false` en `datos\ajustes.json`.
+
 
 ---
 

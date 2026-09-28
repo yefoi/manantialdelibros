@@ -501,7 +501,10 @@ $salida = [ordered]@{
   libros = @($libros)
 }
 $json = $salida | ConvertTo-Json -Depth 6 -Compress
-[IO.File]::WriteAllText($destino, $json, (New-Object Text.UTF8Encoding $false))
+# escritura atomica: primero un temporal y luego se sustituye
+$tmp = "$destino.tmp"
+[IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding $false))
+Move-Item -Force $tmp $destino
 Escribir ("Escrito {0} ({1:N1} MB)" -f $destino, ((Get-Item $destino).Length / 1MB))
 
 # estadisticas

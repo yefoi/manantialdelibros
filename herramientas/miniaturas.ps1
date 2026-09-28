@@ -76,7 +76,10 @@ $total = 0; $hechas = 0; $fallos = 0
 foreach ($i in $imagenes) {
   $total++
   $destino = Join-Path $Salida ($i.Name + '.jpg')
-  if ((Test-Path $destino) -and -not $Forzar) { continue }
+  if ((Test-Path $destino) -and -not $Forzar) {
+    # si la imagen original es mas nueva que la miniatura, se rehace
+    if ((Get-Item $destino).LastWriteTime -ge $i.LastWriteTime) { continue }
+  }
   try { HacerMiniatura $i.FullName $destino; $hechas++ }
   catch { $fallos++; Write-Warning "Fallo con $($i.Name): $($_.Exception.Message)" }
   if ($hechas % 100 -eq 0 -and $hechas -gt 0) { Write-Host "  $hechas miniaturas..." }

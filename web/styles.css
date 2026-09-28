@@ -393,7 +393,22 @@ body.socio .solo-socios-detalle { display: block; }
 .nota { color: var(--tinta-tenue); font-size: .82rem; margin: 0; }
 
 /* ---------------------------------------------------------------- avisos */
+.aviso-catalogo {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 91;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px 10px 18px; border-radius: 999px;
+  background: var(--azul-noche); color: #fff; font-size: .88rem;
+  box-shadow: var(--sombra-alta); animation: subir .25s ease both;
+}
+.aviso-catalogo-punto {
+  width: 8px; height: 8px; border-radius: 50%; background: #7ED0A8; flex: none;
+  animation: latido 1.6s ease-in-out infinite;
+}
+@keyframes latido { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.boton-claro { background: rgba(255, 255, 255, .16); color: #fff; border-color: transparent; padding: 6px 14px; }
+.boton-claro:hover { background: rgba(255, 255, 255, .28); }
 .avisos { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.aviso-catalogo:not([hidden]) ~ .avisos { bottom: 78px; }
 .toast {
   background: var(--azul-noche); color: #fff; padding: 10px 18px; border-radius: 999px;
   font-size: .88rem; box-shadow: var(--sombra-alta); animation: subir .25s ease both;

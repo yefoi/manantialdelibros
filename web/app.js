@@ -14,7 +14,9 @@
     filtros: { texto: '', estado: '', signatura: '', orden: 'titulo', soloPortada: false, porCompletar: false },
     visibles: LOTE,
     detalleId: null,
-    imagenActiva: 0
+    imagenActiva: 0,
+    version: '',
+    actualizando: false
   };
 
   /* ------------------------------------------------------------ utilidades */
@@ -27,7 +29,8 @@
 
   const sinArticulo = (t) => String(t || '').replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
   const claveTitulo = (t) => norm(sinArticulo(t));
-  const urlMedia = (tipo, nombre) => '/media/' + tipo + '/' + encodeURIComponent(nombre);
+  const urlMedia = (tipo, nombre) => '/media/' + tipo + '/' + encodeURIComponent(nombre) +
+    (estado.version ? '?v=' + encodeURIComponent(estado.version) : '');
   const img = (nombre) => urlMedia('thumb', nombre === undefined ? '' : nombre);
 
   const ETIQUETA_ESTADO = { Disponible: 'Disponible', Prestado: 'Prestado', Donado: 'Donado', '': 'Sin estado' };
@@ -317,10 +320,32 @@
   async function cargarLibros() {
     const datos = await api('/api/libros');
     estado.libros = datos.libros || [];
+    estado.version = datos.generado || '';
     pintarPortadaDatos();
     pintarFiltrosCategoria();
     pintar(true);
     pintarFranja();
+  }
+
+  /* -------------------------------------------------- aviso de catalogo */
+  async function revisarCatalogo() {
+    const caja = $('#avisoCatalogo');
+    let s;
+    try { s = await api('/api/estado'); } catch (e) { return; }
+    estado.actualizando = !!s.actualizando;
+    if (s.actualizando) {
+      $('#avisoCatalogoTexto').textContent = 'Actualizando el catálogo… puede tardar un minuto';
+      $('#btnActualizarVista').hidden = true;
+      caja.hidden = false;
+      return;
+    }
+    if (s.version && estado.version && s.version !== estado.version && estado.libros.length) {
+      $('#avisoCatalogoTexto').textContent = 'El catálogo se ha actualizado';
+      $('#btnActualizarVista').hidden = false;
+      caja.hidden = false;
+      return;
+    }
+    caja.hidden = true;
   }
 
   /* ------------------------------------------------------------ eventos */
@@ -487,6 +512,29 @@
     });
 
     // ajustes
+    $('#btnForzarCatalogo').addEventListener('click', async () => {
+      try {
+        await api('/api/actualizar', { method: 'POST' });
+        toast('Actualizando el catálogo…');
+        setTimeout(revisarCatalogo, 1500);
+      } catch (ex) { toast(ex.message, true); }
+    });
+    $('#btnActualizarVista').addEventListener('click', async () => {
+      const boton = $('#btnActualizarVista');
+      boton.disabled = true;
+      try {
+        await cargarLibros();
+        if (estado.detalleId) pintarDetalle();
+        toast('Catálogo actualizado');
+      } catch (ex) { toast(ex.message, true); }
+      boton.disabled = false;
+      revisarCatalogo();
+    });
+
+    // revisar de vez en cuando si el catalogo ha cambiado
+    setInterval(revisarCatalogo, 20000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) revisarCatalogo(); });
+    setTimeout(revisarCatalogo, 4000);
     $('#formAjustes').addEventListener('submit', async (e) => {
       e.preventDefault();
       const err = $('#ajusteError');

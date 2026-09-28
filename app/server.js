@@ -158,8 +158,8 @@ function cargarCatalogo() {
   for (const id of Object.keys(cambios)) {
     if (!vistos.has(id)) libros.push(Object.assign({ id, origen: 'huerfano' }, cambios[id]));
   }
-  const json = Buffer.from(JSON.stringify({ total: libros.length, generado: new Date().toISOString(), libros }), 'utf8');
-  cacheCatalogo = { json, gzip: zlib.gzipSync(json), total: libros.length, libros };
+  const json = Buffer.from(JSON.stringify({ total: libros.length, generado: base.generado || '', libros }), 'utf8');
+  cacheCatalogo = { json, gzip: zlib.gzipSync(json), total: libros.length, libros, version: base.generado || '' };
   return cacheCatalogo;
 }
 function invalidarCatalogo() { cacheCatalogo = null; }
@@ -391,8 +391,15 @@ async function api(req, res, url) {
     const cat = cargarCatalogo();
     return enviarJson(res, 200, {
       logueado: estaLogueado(req), usuario: usuarioActual(),
-      total: cat.total, clavePorDefecto: !!acceso.clavePorDefecto, sitio: ajustes.nombreSitio || 'Manantial de Libros'
+      total: cat.total, clavePorDefecto: !!acceso.clavePorDefecto, sitio: ajustes.nombreSitio || 'Manantial de Libros',
+      version: cat.version, actualizando: importando
     });
+  }
+  if (ruta === '/api/actualizar' && metodo === 'POST') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    if (importando) return enviarJson(res, 200, { ok: true, mensaje: 'Ya se esta actualizando' });
+    actualizarCatalogo('peticion manual');
+    return enviarJson(res, 200, { ok: true, mensaje: 'Actualizando el catalogo' });
   }
   if (ruta === '/api/libros' && metodo === 'GET') {
     const cat = cargarCatalogo();
@@ -598,6 +605,93 @@ async function api(req, res, url) {
   return enviarError(res, 404, 'Ruta no encontrada');
 }
 
+// ------------------------------------------------------------ actualizacion automatica
+let importando = false;
+let importacionPendiente = false;
+let firmaConocidaTexto = '';
+let temporizadorCambios = null;
+
+function firmaArchivo(ruta) {
+  try { const s = fs.statSync(ruta); return s.size + '/' + Math.round(s.mtimeMs); } catch (e) { return '0/0'; }
+}
+function firmaCarpeta(dir) {
+  try {
+    const nombres = fs.readdirSync(dir);
+    let max = 0, total = 0, n = 0;
+    for (const nombre of nombres) {
+      if (nombre.charAt(0) === '~' || nombre.charAt(0) === '.') continue;
+      try {
+        const s = fs.statSync(path.join(dir, nombre));
+        if (s.isFile()) { if (s.mtimeMs > max) max = s.mtimeMs; total += s.size; n++; }
+      } catch (e) { /* archivo en uso: se ignora en esta pasada */ }
+    }
+    return n + '/' + Math.round(max) + '/' + total;
+  } catch (e) { return '0/0/0'; }
+}
+function firmaActual() {
+  const excel = firmaArchivo(ajustes.origenExcel);
+  const carpeta = firmaCarpeta(ORIGEN);
+  const marca = Math.max(Number(excel.split('/')[1]) || 0, Number(carpeta.split('/')[1]) || 0);
+  return { texto: excel + ' | ' + carpeta, marca };
+}
+
+function actualizarCatalogo(motivo, cb) {
+  if (importando) { importacionPendiente = true; if (cb) cb(null); return; }
+  importando = true;
+  importacionPendiente = false;
+  const t0 = Date.now();
+  registrar('*** Cambios detectados (' + motivo + '): reimportando el catalogo... ***');
+  ejecutarPowerShell('importar.ps1', [], (errI) => {
+    if (errI) {
+      registrar('ERROR al reimportar: ' + String(errI.message || errI).split('\n')[0]);
+      importando = false;
+      if (cb) cb(errI);
+      return;
+    }
+    registrar('Catalogo reimportado en ' + Math.round((Date.now() - t0) / 1000) + ' s. Generando miniaturas...');
+    ejecutarPowerShell('miniaturas.ps1', [], (errM) => {
+      if (errM) registrar('Aviso: fallo al generar miniaturas: ' + String(errM.message || errM).split('\n')[0]);
+      invalidarCatalogo();
+      const cat = cargarCatalogo();
+      firmaConocidaTexto = firmaActual().texto;
+      importando = false;
+      registrar('*** Catalogo actualizado: ' + cat.total + ' libros (' + cat.version + ') ***');
+      if (importacionPendiente) { importacionPendiente = false; actualizarCatalogo('cambios encadenados'); }
+      if (cb) cb(null);
+    });
+  });
+}
+
+function ejecutarPowerShell(script, argumentos, cb) {
+  const ruta = path.join(RAIZ, 'herramientas', script);
+  if (!fs.existsSync(ruta)) { registrar('No encuentro ' + ruta); return cb(new Error('script no encontrado')); }
+  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ruta].concat(argumentos || []),
+    { windowsHide: true, maxBuffer: 16 * 1024 * 1024, timeout: 20 * 60 * 1000 }, cb);
+}
+
+function vigilarCambios() {
+  if (ajustes.vigilar === false) { registrar('Vigilancia automatica de cambios: desactivada.'); return; }
+  let firma = firmaActual();
+  firmaConocidaTexto = firma.texto;
+
+  // si los datos de origen son mas nuevos que el catalogo, se actualiza al arrancar
+  const fechaCatalogo = Date.parse(cargarCatalogo().version || '') || 0;
+  if (firma.marca > 0 && fechaCatalogo > 0 && firma.marca > fechaCatalogo + 2000) {
+    registrar('El Excel o las fotos son mas nuevos que el catalogo: se actualizara en unos segundos...');
+    setTimeout(() => actualizarCatalogo('arranque'), 6000);
+  }
+
+  setInterval(() => {
+    firma = firmaActual();
+    if (firma.texto === firmaConocidaTexto) return;
+    firmaConocidaTexto = firma.texto;
+    clearTimeout(temporizadorCambios);
+    // se espera a que termine de copiarse antes de reimportar
+    temporizadorCambios = setTimeout(() => actualizarCatalogo('Excel o fotos modificados'), 7000);
+  }, 10000);
+  registrar('Vigilando cambios en el Excel y en la carpeta de fotos.');
+}
+
 // ------------------------------------------------------------ servidor
 const servidor = http.createServer(async (req, res) => {
   let url;
@@ -668,6 +762,7 @@ servidor.listen(ajustes.puerto, '0.0.0.0', () => {
     registrar(' (o vuelvas a ejecutar herramientas/importar.ps1).');
   }
   registrar('=====================================================');
+  vigilarCambios();
 });
 servidor.on('error', (e) => {
   if (e.code === 'EADDRINUSE') {
