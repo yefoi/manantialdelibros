@@ -79,6 +79,18 @@ Estructura de carpetas
   Iniciar Manantial de Libros.bat
 
 
+Repositorio en GitHub
+---------------------
+El programa está publicado en:
+      https://github.com/yefoi/manantialdelibros
+
+En el repositorio NO se suben los datos de la biblioteca (catálogo, fotos
+subidas, contraseña): solo el programa, el diseño y las herramientas.
+
+Para subir cambios que se hayan hecho en el programa:
+      doble clic en "Subir cambios a GitHub.bat"
+
+
 Notas
 -----
 · El Excel NO se modifica nunca: es la fuente original. Los cambios del
