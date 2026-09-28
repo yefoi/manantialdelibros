@@ -220,10 +220,19 @@
     <div class="revision-filtros">
       <label class="campo"><span>Buscar en la lista</span>
         <input type="text" id="revisionBuscar" placeholder="título, autor…" autocomplete="off"></label>
+      <label class="campo"><span>Estado</span>
+        <select id="revisionEstado">
+          <option value="">Todos</option>
+          <option value="Disponible">Disponible</option>
+          <option value="Prestado">Prestado</option>
+          <option value="Donado">Donado</option>
+          <option value="__sin__">Sin estado</option>
+        </select></label>
       <label class="campo" id="revisionCampoEstanteria"><span>Estantería</span>
         <select id="revisionEstanteria"><option value="">Todas</option></select></label>
     </div>
     <p class="contador" id="revisionContador"></p>
+    <p class="revision-pista" id="revisionPista" hidden></p>
     <div class="revision-lista" id="revisionLista"></div>
     <div class="formulario-acciones">
       <button class="boton boton-contorno" type="button" id="btnRevisionCsv">Descargar lista (CSV)</button>

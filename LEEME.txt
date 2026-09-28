@@ -152,8 +152,13 @@ pantalla de trabajo con listas de libros:
    · Ficha incompleta      -> sin autor ni editorial
    · Sin estado            -> sin Disponible / Prestado / Donado
 
-Se puede filtrar por estantería y buscar por título o autor; al pulsar
-un libro se abre su ficha para completarla.
+Se puede filtrar por estado y estantería, y buscar por título o autor; al
+pulsar un libro se abre su ficha para completarla.
+
+Ojo: las listas incluyen también los libros DONADOS (ya regalados, que
+por eso no tienen foto ni estantería). Para ver solo los que están en la
+biblioteca, pon el filtro de estado en "Disponible". La propia pantalla
+te avisa de cuántos de cada lista están donados.
 
 El botón "Descargar lista (CSV)" guarda en un archivo la lista que estés
 viendo (con título, autor, editorial, categoría, estantería, balda y

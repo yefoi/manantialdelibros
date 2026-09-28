@@ -399,7 +399,11 @@
   function revisionLista() {
     const texto = norm($('#revisionBuscar').value);
     const est = $('#revisionEstanteria').value;
+    const estFiltro = $('#revisionEstado').value;
     let lista = librosDeGrupo(revisionGrupo);
+    if (estFiltro) {
+      lista = estFiltro === '__sin__' ? lista.filter((l) => !l.estado) : lista.filter((l) => l.estado === estFiltro);
+    }
     if (texto) lista = lista.filter((l) => norm([l.titulo, l.autor, l.editorial, l.signatura].join(' ')).includes(texto));
     if (est) lista = lista.filter((l) => String(l.estanteria || '') === est);
     return lista.slice().sort((a, b) => {
@@ -436,6 +440,22 @@
       ? lista.length.toLocaleString('es-ES') + (lista.length === 1 ? ' libro' : ' libros') +
         (lista.length > trozo.length ? ' · mostrando los primeros ' + trozo.length : '')
       : (librosDeGrupo(revisionGrupo).length ? 'Ningún libro coincide con el filtro.' : '');
+
+    // pista: recordar cuantos de la lista estan donados (ya no estan en las estanterias)
+    const pista = $('#revisionPista');
+    const todos = librosDeGrupo(revisionGrupo);
+    const donados = todos.filter((l) => l.estado === 'Donado').length;
+    if (!$('#revisionEstado').value && !$('#revisionBuscar').value && donados >= 20 && donados < todos.length &&
+        (revisionGrupo === 'sinFoto' || revisionGrupo === 'sinUbicacion' || revisionGrupo === 'incompletos')) {
+      pista.hidden = false;
+      pista.textContent = 'De estos ' + todos.length.toLocaleString('es-ES') + ' hay ' + donados.toLocaleString('es-ES') +
+        ' que están donados (ya se regalaron, por eso no tienen foto ni estantería) y ' +
+        (todos.length - donados).toLocaleString('es-ES') + ' que sí pueden necesitar atención. ' +
+        'Elige «Disponible» en el filtro de estado para ver solo esos.';
+    } else {
+      pista.hidden = true;
+    }
+
     $('#revisionLista').innerHTML = trozo.length ? trozo.map((l) => {
       const etiqueta = l.id ? 'button' : 'div';
       const donde = [l.estanteria ? 'Est. ' + l.estanteria + (l.balda ? '·' + l.balda : '') : '', l.estado || '', l._baja ? 'venía ' + (l.veces || 1) + ' vez/veces' : '']
@@ -689,6 +709,7 @@
       pintarRevision();
     });
     $('#revisionBuscar').addEventListener('input', () => pintarRevision());
+    $('#revisionEstado').addEventListener('change', () => pintarRevision());
     $('#revisionEstanteria').addEventListener('change', () => pintarRevision());
     $('#revisionLista').addEventListener('click', (e) => {
       const fila = e.target.closest('[data-id]');
