@@ -48,6 +48,11 @@
   --gris: #6B7780;       --gris-claro: #EBEFF2;
   --rojo: #A5432A;       --rojo-claro: #FAEDE8;
 
+  /* colores de estado (etiquetas de los libros) */
+  --disponible: #2E7D5B;  --disponible-claro: #E3F1EA;
+  --prestado: #C47410;    --prestado-claro: #FBEFDA;
+  --donado: #BE3B2C;      --donado-claro: #FAE9E6;
+
   --sombra: 0 1px 2px rgba(23, 36, 47, .06), 0 8px 24px -16px rgba(23, 36, 47, .28);
   --sombra-alta: 0 2px 6px rgba(23, 36, 47, .08), 0 24px 48px -24px rgba(23, 36, 47, .38);
   --radio: 14px;
@@ -177,6 +182,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .buscador .limpiar:hover { background: var(--borde); color: var(--tinta); }
 .portada-datos { margin: 20px 0 0; color: var(--tinta-tenue); font-size: .86rem; letter-spacing: .01em; }
 .portada-datos b { color: var(--azul-oscuro); font-weight: 600; }
+.portada-datos .n-disponible { color: var(--disponible); }
+.portada-datos .n-prestado { color: var(--prestado); }
+.portada-datos .n-donado { color: var(--donado); }
 
 /* ---------------------------------------------------------------- filtros */
 .barra-filtros {
@@ -193,11 +201,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .pildora:hover { background: var(--superficie); color: var(--tinta); }
 .pildora.activa { background: var(--azul); border-color: var(--azul); color: #fff; }
+.pildora[data-estado="Disponible"].activa { background: var(--disponible); border-color: var(--disponible); }
+.pildora[data-estado="Prestado"].activa { background: var(--prestado); border-color: var(--prestado); }
+.pildora[data-estado="Donado"].activa { background: var(--donado); border-color: var(--donado); }
 .punto { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-.punto-disponible { background: var(--verde); }
-.punto-prestado { background: var(--ambar); }
-.punto-donado { background: var(--gris); }
-.pildora.activa .punto { box-shadow: 0 0 0 2px rgba(255, 255, 255, .45); }
+.punto-disponible { background: var(--disponible); }
+.punto-prestado { background: var(--prestado); }
+.punto-donado { background: var(--donado); }
+.pildora.activa .punto { background: rgba(255, 255, 255, .9); box-shadow: none; }
 
 .filtros-secundarios { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
 .campo { display: flex; flex-direction: column; gap: 5px; font-size: .8rem; color: var(--tinta-tenue); }
@@ -254,18 +265,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tarjeta-sinPortada small { font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; }
 .insignia {
   position: absolute; top: 9px; right: 9px; z-index: 3;
-  padding: 4px 9px; border-radius: 999px; font-size: .68rem; letter-spacing: .01em;
-  background: rgba(255, 255, 255, .95); box-shadow: 0 1px 4px rgba(23, 36, 47, .16);
+  padding: 4px 10px; border-radius: 999px; font-size: .68rem; letter-spacing: .01em;
+  background: var(--tinta-tenue); color: #fff;
+  box-shadow: 0 2px 6px rgba(23, 36, 47, .28);
   display: inline-flex; align-items: center; gap: 5px; font-weight: 600;
 }
-.insignia i { width: 6px; height: 6px; border-radius: 50%; font-style: normal; }
-.insignia-Disponible { color: var(--verde); }
-.insignia-Disponible i { background: var(--verde); }
-.insignia-Prestado { color: var(--ambar); }
-.insignia-Prestado i { background: var(--ambar); }
-.insignia-Donado { color: var(--gris); }
-.insignia-Donado i { background: var(--gris); }
-.insignia-vacia { color: var(--tinta-tenue); }
+.insignia i { width: 6px; height: 6px; border-radius: 50%; font-style: normal; background: rgba(255, 255, 255, .85); }
+.insignia-Disponible { background: var(--disponible); }
+.insignia-Prestado { background: var(--prestado); }
+.insignia-Donado { background: var(--donado); }
+.insignia-vacia { background: rgba(255, 255, 255, .95); color: var(--tinta-tenue); }
 .insignia-vacia i { background: var(--tinta-tenue); }
 .insignia-nuevo { background: var(--azul-m); color: #fff; top: auto; bottom: 9px; right: auto; left: 9px; }
 .insignia-nuevo i { display: none; }
@@ -330,10 +339,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .detalle-info h2 { font-size: clamp(1.4rem, 3.2vw, 1.95rem); }
 .detalle-autor { margin: 8px 0 0; color: var(--tinta-suave); font-size: 1.02rem; }
 .estado-linea { margin: 16px 0 0; }
-.estado-linea .insignia {
-  position: static; padding: 0; background: transparent; box-shadow: none;
-  font-size: .82rem; gap: 7px; color: inherit;
-}
+.estado-linea .insignia { position: static; font-size: .8rem; padding: 5px 12px; }
 .estado-linea .insignia i { width: 7px; height: 7px; }
 .detalle-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 18px 0 0; font-size: .86rem; color: var(--tinta-suave); }
 .detalle-meta div { display: flex; gap: 6px; }
@@ -357,9 +363,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .estados button:hover { background: var(--papel-2); color: var(--tinta); }
 .estados button.activo { border-color: currentColor; }
-.estados button[data-estado="Disponible"].activo { background: var(--verde-claro); color: var(--verde); }
-.estados button[data-estado="Prestado"].activo { background: var(--ambar-claro); color: var(--ambar); }
-.estados button[data-estado="Donado"].activo { background: var(--gris-claro); color: var(--gris); }
+.estados button[data-estado="Disponible"].activo { background: var(--disponible-claro); color: var(--disponible); }
+.estados button[data-estado="Prestado"].activo { background: var(--prestado-claro); color: var(--prestado); }
+.estados button[data-estado="Donado"].activo { background: var(--donado-claro); color: var(--donado); }
 .estados .punto { width: 7px; height: 7px; }
 .enlace-doc {
   display: inline-flex; align-items: center; gap: 8px; margin-top: 10px;

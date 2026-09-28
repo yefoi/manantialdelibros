@@ -132,8 +132,9 @@
     const conPortada = libs.filter((l) => l.portadas && l.portadas.length).length;
     $('#datosPortada').innerHTML =
       '<b>' + libs.length.toLocaleString('es-ES') + '</b> libros en el catálogo · ' +
-      '<b>' + cuenta('Disponible').toLocaleString('es-ES') + '</b> disponibles · ' +
-      '<b>' + cuenta('Donado').toLocaleString('es-ES') + '</b> donados · ' +
+      '<b class="n-disponible">' + cuenta('Disponible').toLocaleString('es-ES') + '</b> disponibles · ' +
+      (cuenta('Prestado') ? '<b class="n-prestado">' + cuenta('Prestado').toLocaleString('es-ES') + '</b> prestados · ' : '') +
+      '<b class="n-donado">' + cuenta('Donado').toLocaleString('es-ES') + '</b> donados · ' +
       '<b>' + conPortada.toLocaleString('es-ES') + '</b> con portada';
     $('#pieNota').textContent = 'Catálogo con ' + libs.length.toLocaleString('es-ES') + ' libros. Los socios pueden actualizar estados y subir portadas e información.';
   }
