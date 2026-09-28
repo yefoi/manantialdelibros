@@ -15,7 +15,7 @@ if ($Quitar) {
   exit 0
 }
 
-$bat = Join-Path $Raiz 'Iniciar Manantial de Libros.bat'
+$bat = Join-Path $Raiz 'herramientas\arrancar-servidor.bat'
 if (-not (Test-Path $bat)) { Write-Error "No encuentro el lanzador: $bat"; exit 1 }
 
 $shell = New-Object -ComObject WScript.Shell

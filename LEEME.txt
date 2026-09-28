@@ -19,9 +19,28 @@ carpeta "libros FINAL".
 
 Cómo se enciende
 -----------------
-1. Doble clic en:      "Iniciar Manantial de Libros.bat"
-2. Se abre solo el navegador en  http://localhost:8080
-3. Para pararlo, cierra la ventana negra (o pulsa Ctrl+C).
+Ya se enciende solo al arrancar Windows (minimizado, sin abrir el navegador).
+Si algún día hay que hacerlo a mano:
+   1. Doble clic en:      "Iniciar Manantial de Libros.bat"
+   2. Se abre el navegador en  http://localhost:8080
+   3. Para pararlo, cierra la ventana negra (o pulsa Ctrl+C).
+
+Que esté siempre disponible
+----------------------------
+El sitio funciona DENTRO de este ordenador: mientras esté apagado o
+suspendido, la web no responde. Ya está preparado para que no pase:
+
+   · El equipo NO se suspende estando enchufado
+        (para deshacerlo:  herramientas\no-dormir.ps1 -Quitar)
+   · El sitio se arranca solo al encender el PC, minimizado y sin abrir
+     el navegador
+        (para deshacerlo:  herramientas\arranque-automatico.ps1 -Quitar)
+
+Si el PC ha estado apagado y en ese tiempo han cambiado el Excel o las
+fotos, al arrancar el sitio se da cuenta y reimporta el catálogo solo.
+
+Para ver la dirección actual y si el puerto está abierto:
+   "Ver la direccion del sitio.bat"
 
 
 Cómo se entra desde móviles u otros ordenadores (wifi del local)
