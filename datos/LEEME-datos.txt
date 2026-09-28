@@ -8,6 +8,7 @@ En esta carpeta vive todo lo que el sitio guarda en este ordenador.
   · subidas/         portadas, contraportadas e información subidas desde el sitio
   · miniaturas/      copias pequeñas de las portadas, para que cargue rápido
   · revision.txt     avisos de la última importación (para revisar a mano)
+  · novedades.json   libros nuevos y desaparecidos respecto a la importación anterior
 
 Para regenerar biblioteca.json y miniaturas/ (por ejemplo, en otro ordenador):
 

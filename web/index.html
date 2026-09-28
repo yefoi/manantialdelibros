@@ -28,6 +28,7 @@
       <span class="fundacion-texto"><small>Fundación</small><strong>Manantial</strong></span>
     </a>
     <nav class="cabecera-acciones">
+      <button class="boton boton-fantasma solo-socios" id="btnRevision" hidden>Revisión</button>
       <button class="boton boton-fantasma solo-socios" id="btnNuevoLibro" hidden>Añadir libro</button>
       <button class="boton boton-fantasma solo-socios" id="btnAjustes" hidden>Ajustes</button>
       <button class="boton boton-principal" id="btnAcceso">Entrar</button>
@@ -205,6 +206,30 @@
     <p class="error" id="nuevoError" hidden></p>
     <div class="formulario-acciones"><button class="boton boton-principal" type="submit">Guardar libro</button></div>
   </form>
+</dialog>
+
+<!-- ------------------------------ revision del catalogo ------------------------------ -->
+<dialog class="panel" id="panelRevision">
+  <div class="panel-cabecera">
+    <p class="panel-etiqueta">Revisión del catálogo</p>
+    <button class="cerrar" data-cerrar aria-label="Cerrar">×</button>
+  </div>
+  <div class="panel-cuerpo">
+    <p class="nota" id="revisionResumen"></p>
+    <div class="revision-grupos" id="revisionGrupos"></div>
+    <div class="revision-filtros">
+      <label class="campo"><span>Buscar en la lista</span>
+        <input type="text" id="revisionBuscar" placeholder="título, autor…" autocomplete="off"></label>
+      <label class="campo" id="revisionCampoEstanteria"><span>Estantería</span>
+        <select id="revisionEstanteria"><option value="">Todas</option></select></label>
+    </div>
+    <p class="contador" id="revisionContador"></p>
+    <div class="revision-lista" id="revisionLista"></div>
+    <div class="formulario-acciones">
+      <button class="boton boton-contorno" type="button" id="btnRevisionCsv">Descargar lista (CSV)</button>
+      <button class="boton boton-contorno" type="button" id="btnRevisionCerrar">Cerrar</button>
+    </div>
+  </div>
 </dialog>
 
 <datalist id="listaSignaturas"></datalist>

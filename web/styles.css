@@ -418,6 +418,33 @@ body.socio .solo-socios-detalle { display: block; }
 .explorar-item .detalle { margin-left: auto; color: var(--tinta-tenue); font-size: .76rem; }
 .explorar-vacio { margin: 0; padding: 20px; text-align: center; color: var(--tinta-tenue); font-size: .88rem; }
 
+/* ---------------------------------------------------------------- revision */
+.revision-grupos { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 18px; }
+.revision-grupos button {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px;
+  border-radius: 999px; border: 1px solid var(--borde-fuerte); background: var(--superficie);
+  color: var(--tinta-suave); cursor: pointer; font-size: .88rem;
+}
+.revision-grupos button:hover { background: var(--papel-2); color: var(--tinta); }
+.revision-grupos button.activa { background: var(--azul); border-color: var(--azul); color: #fff; }
+.revision-grupos button b { font-weight: 600; }
+.revision-filtros { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 16px; }
+.revision-lista {
+  max-height: 46vh; overflow: auto; border: 1px solid var(--borde); border-radius: 10px; margin-bottom: 18px;
+}
+.revision-fila {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 9px 13px; border: 0; border-bottom: 1px solid var(--borde); background: transparent;
+}
+.revision-fila:last-child { border-bottom: 0; }
+.revision-fila.pulsable { cursor: pointer; }
+.revision-fila.pulsable:hover { background: var(--papel-2); }
+.revision-fila .texto { min-width: 0; flex: 1; }
+.revision-fila .titulo { display: block; font-family: var(--titulo); font-weight: 600; font-size: .92rem; }
+.revision-fila .sub { display: block; color: var(--tinta-suave); font-size: .78rem; }
+.revision-fila .donde { color: var(--tinta-tenue); font-size: .76rem; white-space: nowrap; }
+.revision-vacio { margin: 0; padding: 24px; text-align: center; color: var(--tinta-tenue); font-size: .9rem; }
+
 /* ---------------------------------------------------------------- avisos */
 .aviso-catalogo {
   position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 91;

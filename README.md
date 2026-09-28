@@ -112,9 +112,29 @@ acentos, filtros por estado y categoría, ficha con galería de imágenes y acci
 |---|---|
 | Actualizar el catálogo | automático al guardar el Excel o cambiar las fotos (1–2 min); también `Ajustes → Actualizar ahora` o `herramientas\importar.ps1` + `miniaturas.ps1` |
 | Cambiar de sitio el Excel o las fotos | `Ajustes → Listado y carpeta de fotos` (explorador incluido); reimporta solo |
+| Revisar el catálogo | botón `Revisión` (socios): nuevos, desaparecidos, sin foto, sin ubicación… con filtro por estantería y descarga CSV |
 | Copia de seguridad | `herramientas\copia-seguridad.ps1` (ZIP con fecha en `copias\`) |
 | Arrancar solo al encender el PC | `herramientas\arranque-automatico.ps1` (`-Quitar` para desactivar) |
 | Cambiar el puerto | editar `puerto` en `datos\ajustes.json` |
+
+## Revisión del catálogo
+
+El importador compara el catálogo nuevo con el anterior usando una clave de **título + autor**
+(sin el artículo inicial, para que los cambios de título no cuenten como altas o bajas) y escribe
+`datos\novedades.json` con los libros nuevos y los desaparecidos. La pantalla *Revisión* (socios)
+usa ese archivo y el propio catálogo para ofrecer las listas de trabajo:
+
+| Grupo | Qué muestra |
+|---|---|
+| Nuevos en el listado | altas desde la última importación |
+| Ya no están | bajas (desaparecidos del Excel) |
+| Sin foto | sin ninguna portada |
+| Sin ubicación | sin estantería o con estantería 0 |
+| Ficha incompleta | sin autor ni editorial |
+| Sin estado | sin disponible / prestado / donado |
+
+Con filtro por estantería, búsqueda, apertura de la ficha al pulsar y descarga en CSV (con BOM,
+separador `;`, listo para Excel).
 
 ## Rutas configurables desde el sitio
 

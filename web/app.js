@@ -16,7 +16,8 @@
     detalleId: null,
     imagenActiva: 0,
     version: '',
-    actualizando: false
+    actualizando: false,
+    novedades: { altas: [], bajas: [] }
   };
 
   /* ------------------------------------------------------------ utilidades */
@@ -307,6 +308,7 @@
     $('#btnAcceso').textContent = s.logueado ? (s.usuario || 'Socio') : 'Entrar';
     $('#btnNuevoLibro').hidden = !s.logueado;
     $('#btnAjustes').hidden = !s.logueado;
+    $('#btnRevision').hidden = !s.logueado;
     $('#avisoClave').hidden = !s.clavePorDefecto;
     $('#ajusteUsuario').value = s.usuario || '';
   }
@@ -370,6 +372,104 @@
     catch (e) { toast(e.message, true); }
   }
 
+  /* ------------------------------------------- revision del catalogo */
+  let revisionGrupo = 'sinFoto';
+
+  const GRUPOS_REVISION = [
+    { id: 'altas', nombre: 'Nuevos en el listado' },
+    { id: 'bajas', nombre: 'Ya no están' },
+    { id: 'sinFoto', nombre: 'Sin foto' },
+    { id: 'sinUbicacion', nombre: 'Sin ubicación' },
+    { id: 'incompletos', nombre: 'Ficha incompleta' },
+    { id: 'sinEstado', nombre: 'Sin estado' }
+  ];
+
+  function librosDeGrupo(g) {
+    const L = estado.libros;
+    const nov = estado.novedades || { altas: [], bajas: [] };
+    if (g === 'altas') return (nov.altas || []).map((a) => L.find((l) => l.id === a.id) || a);
+    if (g === 'bajas') return (nov.bajas || []).map((b) => Object.assign({ titulo: b.titulo, autor: b.autor, _baja: true }, b));
+    if (g === 'sinFoto') return L.filter((l) => !(l.portadas && l.portadas.length));
+    if (g === 'sinUbicacion') return L.filter((l) => !l.estanteria || l.estanteria === '0');
+    if (g === 'incompletos') return L.filter((l) => !l.autor && !l.editorial);
+    if (g === 'sinEstado') return L.filter((l) => !l.estado);
+    return [];
+  }
+
+  function revisionLista() {
+    const texto = norm($('#revisionBuscar').value);
+    const est = $('#revisionEstanteria').value;
+    let lista = librosDeGrupo(revisionGrupo);
+    if (texto) lista = lista.filter((l) => norm([l.titulo, l.autor, l.editorial, l.signatura].join(' ')).includes(texto));
+    if (est) lista = lista.filter((l) => String(l.estanteria || '') === est);
+    return lista.slice().sort((a, b) => {
+      const ua = String(a.estanteria || '') + '·' + String(a.balda || '');
+      const ub = String(b.estanteria || '') + '·' + String(b.balda || '');
+      if (ua !== ub) return ua.localeCompare(ub, 'es');
+      return claveTitulo(a.titulo || '').localeCompare(claveTitulo(b.titulo || ''), 'es');
+    });
+  }
+
+  function pintarRevision() {
+    const nov = estado.novedades || { altas: [], bajas: [], primeraVez: true, generado: '' };
+    $('#revisionResumen').textContent = nov.primeraVez
+      ? 'Todavía no hay una importación anterior con la que comparar. A partir de la próxima verás aquí los libros nuevos y los que desaparecen.'
+      : 'Última comparación: ' + String(nov.generado || '').replace('T', ' ').slice(0, 16) + ' · ' +
+        (nov.altas || []).length + ' libros nuevos y ' + (nov.bajas || []).length + ' que ya no están en el listado.';
+
+    $('#revisionGrupos').innerHTML = GRUPOS_REVISION.map((g) => {
+      const n = (g.id === 'altas' || g.id === 'bajas') ? (nov[g.id] || []).length : librosDeGrupo(g.id).length;
+      return '<button type="button" data-grupo="' + g.id + '" class="' + (g.id === revisionGrupo ? 'activa' : '') + '">' +
+        g.nombre + ' <b>' + n.toLocaleString('es-ES') + '</b></button>';
+    }).join('');
+
+    const sel = $('#revisionEstanteria');
+    const ests = Array.from(new Set(librosDeGrupo(revisionGrupo).map((l) => String(l.estanteria || '')).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, 'es'));
+    const elegida = sel.value;
+    sel.innerHTML = '<option value="">Todas</option>' + ests.map((e) => '<option value="' + escap(e) + '">' + escap(e) + '</option>').join('');
+    if (ests.includes(elegida)) sel.value = elegida;
+
+    const lista = revisionLista();
+    const trozo = lista.slice(0, 300);
+    $('#revisionContador').textContent = lista.length
+      ? lista.length.toLocaleString('es-ES') + (lista.length === 1 ? ' libro' : ' libros') +
+        (lista.length > trozo.length ? ' · mostrando los primeros ' + trozo.length : '')
+      : (librosDeGrupo(revisionGrupo).length ? 'Ningún libro coincide con el filtro.' : '');
+    $('#revisionLista').innerHTML = trozo.length ? trozo.map((l) => {
+      const etiqueta = l.id ? 'button' : 'div';
+      const donde = [l.estanteria ? 'Est. ' + l.estanteria + (l.balda ? '·' + l.balda : '') : '', l.estado || '', l._baja ? 'venía ' + (l.veces || 1) + ' vez/veces' : '']
+        .filter(Boolean).join(' · ');
+      return '<' + etiqueta + ' class="revision-fila ' + (l.id ? 'pulsable' : '') + '" ' +
+        (l.id ? 'type="button" data-id="' + escap(l.id) + '"' : '') + '>' +
+        '<span class="texto"><span class="titulo">' + escap(l.titulo || '') + '</span>' +
+        '<span class="sub">' + escap([l.autor, l.editorial].filter(Boolean).join(' · ')) + '</span></span>' +
+        '<span class="donde">' + escap(donde) + '</span></' + etiqueta + '>';
+    }).join('') : '<p class="revision-vacio">No hay libros en esta lista.</p>';
+  }
+
+  async function abrirRevision() {
+    const panel = $('#panelRevision');
+    if (!panel.open) panel.showModal();
+    try { estado.novedades = await api('/api/novedades'); } catch (e) { estado.novedades = { altas: [], bajas: [] }; }
+    pintarRevision();
+  }
+
+  function descargarRevisionCsv() {
+    const lista = revisionLista();
+    const cabecera = ['Titulo', 'Autor', 'Editorial', 'Categoria', 'Estanteria', 'Balda', 'Estado'];
+    const filas = lista.map((l) => [l.titulo, l.autor, l.editorial, l.signatura, l.estanteria, l.balda, l.estado]
+      .map((v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(';'));
+    const texto = '\uFEFF' + cabecera.join(';') + '\r\n' + filas.join('\r\n');
+    const blob = new Blob([texto], { type: 'text/csv;charset=utf-8' });
+    const enlace = document.createElement('a');
+    enlace.href = URL.createObjectURL(blob);
+    const grupo = (GRUPOS_REVISION.find((g) => g.id === revisionGrupo) || {}).nombre || revisionGrupo;
+    enlace.download = 'revision-' + grupo.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+    enlace.click();
+    setTimeout(() => URL.revokeObjectURL(enlace.href), 5000);
+  }
+
   /* ------------------------------------------------------------ arranque */
   async function cargarSesion() {
     try { estado.sesion = await api('/api/estado'); } catch (e) { /* sin conexion */ }
@@ -384,6 +484,10 @@
     pintarFiltrosCategoria();
     pintar(true);
     pintarFranja();
+    if ($('#panelRevision').open) {
+      try { estado.novedades = await api('/api/novedades'); } catch (e) { /* nada */ }
+      pintarRevision();
+    }
   }
 
   /* -------------------------------------------------- aviso de catalogo */
@@ -574,6 +678,24 @@
         toast('Bienvenido/a, ' + (estado.sesion.usuario || ''));
       } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     });
+
+    // revision del catalogo
+    $('#btnRevision').addEventListener('click', abrirRevision);
+    $('#revisionGrupos').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-grupo]');
+      if (!b) return;
+      revisionGrupo = b.dataset.grupo;
+      $('#revisionBuscar').value = '';
+      pintarRevision();
+    });
+    $('#revisionBuscar').addEventListener('input', () => pintarRevision());
+    $('#revisionEstanteria').addEventListener('change', () => pintarRevision());
+    $('#revisionLista').addEventListener('click', (e) => {
+      const fila = e.target.closest('[data-id]');
+      if (fila) abrirDetalle(fila.dataset.id);
+    });
+    $('#btnRevisionCsv').addEventListener('click', descargarRevisionCsv);
+    $('#btnRevisionCerrar').addEventListener('click', () => $('#panelRevision').close());
 
     // ajustes
     $('#btnExaminarExcel').addEventListener('click', () => abrirExplorador('archivo'));

@@ -402,6 +402,13 @@ async function api(req, res, url) {
     return enviarJson(res, 200, { ok: true, mensaje: 'Actualizando el catalogo' });
   }
 
+  // ---- novedades de la ultima importacion (libros nuevos y desaparecidos)
+  if (ruta === '/api/novedades' && metodo === 'GET') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    const nov = leerJson(path.join(DATOS, 'novedades.json'), { generado: '', primeraVez: true, altas: [], bajas: [] });
+    return enviarJson(res, 200, nov);
+  }
+
   // ---- rutas del Excel y de la carpeta de fotos
   if (ruta === '/api/rutas' && metodo === 'GET') {
     if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');

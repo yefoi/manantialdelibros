@@ -52,8 +52,7 @@ function FechaExcel([string]$v) {
   return $v
 }
 
-function ArreglarTitulo([string]$titulo, [string]$archivo) {
-  # El listado del Excel escribe los titulos por la palabra significativa
+function ArreglarTitulo([string]$titulo, [string]$archivo) {  # El listado del Excel escribe los titulos por la palabra significativa
   # ("alcalde de Zalamea"); los nombres de archivo llevan el articulo al final
   # ("alcalde de zalamea, el 01.jpg"). Aqui se reconstruye el titulo completo.
   $t = ([string]$titulo).Trim()
@@ -447,26 +446,7 @@ foreach ($l in $libros) {
 }
 Escribir ("  titulos corregidos: {0}" -f $correcciones.Count)
 
-# ------------------------------------------------------------- revision
-$informe = New-Object Collections.ArrayList
-[void]$informe.Add("# Revision de la importacion - $(Get-Date -Format 'yyyy-MM-dd HH:mm')")
-[void]$informe.Add("")
-[void]$informe.Add("## Emparejados por similitud (revisar que el libro sea el correcto)")
-if ($sugerencias.Count) { foreach ($s in $sugerencias) { [void]$informe.Add("  $s") } } else { [void]$informe.Add("  (ninguno)") }
-[void]$informe.Add("")
-[void]$informe.Add("## Titulos reconstruidos (articulo recuperado del nombre del archivo)")
-if ($correcciones.Count) { foreach ($c in $correcciones) { [void]$informe.Add("  $c") } } else { [void]$informe.Add("  (ninguno)") }
-[void]$informe.Add("")
-[void]$informe.Add("## Archivos sin asignar a ningun libro")
-$resto = @()
-foreach ($k in ($grupos.Keys | Sort-Object)) {
-  foreach ($letra in ($grupos[$k].Keys | Sort-Object)) {
-    $g = $grupos[$k][$letra]
-    foreach ($n in @($g.img1) + @($g.img2) + @($g.docs)) { if (-not $usados.ContainsKey($n)) { $resto += $n } }
-  }
-}
-if ($resto.Count) { foreach ($n in ($resto | Sort-Object -Unique)) { [void]$informe.Add("  $n") } } else { [void]$informe.Add("  (ninguno)") }
-$informe -join "`r`n" | Set-Content -Path (Join-Path $Raiz 'datos\revision.txt') -Encoding UTF8
+# (el informe de revision se escribe al final, cuando ya se sabe que ha cambiado)
 
 # ---------------------------------------------------------------- docx
 Escribir "Leyendo informacion (.docx)..."
@@ -493,6 +473,100 @@ Escribir ("  docx leidos: {0}" -f $leidos)
 
 # ---------------------------------------------------------------- salida
 $destino = Join-Path $Raiz 'datos\biblioteca.json'
+
+# --- comparar con el catalogo anterior para saber que ha cambiado ---
+# la clave ignora el articulo inicial para que los cambios de titulo no
+# cuenten como libros nuevos o desaparecidos
+function ClaveLibro($l) {
+  $t = [regex]::Replace((Normalizar $l.titulo), '^(EL|LA|LOS|LAS|UN|UNA|UNOS|UNAS)\s+', '')
+  return $t + '|' + (Normalizar $l.autor)
+}
+$antesInfo = @{}    # clave -> datos del libro
+$antesCuenta = @{}  # clave -> cuantas veces aparece
+$habiaAnterior = $false
+if (Test-Path $destino) {
+  try {
+    $previo = Get-Content $destino -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($previo.libros) {
+      $habiaAnterior = $true
+      foreach ($l in $previo.libros) {
+        $k = ClaveLibro $l
+        if (-not $antesInfo.ContainsKey($k)) { $antesInfo[$k] = $l }
+        if ($antesCuenta.ContainsKey($k)) { $antesCuenta[$k]++ } else { $antesCuenta[$k] = 1 }
+      }
+    }
+  } catch { $habiaAnterior = $false }
+}
+
+$altas = New-Object Collections.ArrayList
+$sobrantes = @{}
+foreach ($k in $antesCuenta.Keys) { $sobrantes[$k] = $antesCuenta[$k] }
+foreach ($l in $libros) {
+  $k = ClaveLibro $l
+  if ($sobrantes.ContainsKey($k) -and $sobrantes[$k] -gt 0) { $sobrantes[$k]-- }
+  else { [void]$altas.Add([pscustomobject]@{ id = $l.id; titulo = $l.titulo; autor = $l.autor; estado = $l.estado; estanteria = $l.estanteria }) }
+}
+$bajas = New-Object Collections.ArrayList
+foreach ($k in $sobrantes.Keys) {
+  if ($sobrantes[$k] -gt 0) {
+    $info = $antesInfo[$k]
+    [void]$bajas.Add([pscustomobject]@{
+      titulo = if ($info) { $info.titulo } else { ($k -split '\|')[0] }
+      autor = if ($info) { $info.autor } else { '' }
+      estado = if ($info) { $info.estado } else { '' }
+      veces = $sobrantes[$k]
+    })
+  }
+}
+if ($habiaAnterior) { Escribir ("  novedades: {0} altas, {1} bajas" -f $altas.Count, $bajas.Count) }
+
+# ------------------------------------------------------------- informe
+$informe = New-Object Collections.ArrayList
+[void]$informe.Add("# Revision de la importacion - $(Get-Date -Format 'yyyy-MM-dd HH:mm')")
+[void]$informe.Add("")
+[void]$informe.Add("## Novedades respecto a la importacion anterior")
+if (-not $habiaAnterior) {
+  [void]$informe.Add("  (primera importacion: no hay con que comparar)")
+} elseif (-not $altas.Count -and -not $bajas.Count) {
+  [void]$informe.Add("  (sin cambios: estan los mismos libros que antes)")
+} else {
+  if ($altas.Count) {
+    [void]$informe.Add("  Libros nuevos ($($altas.Count)):")
+    foreach ($a in $altas) { [void]$informe.Add("     + $($a.titulo)   [$($a.autor)]") }
+  }
+  if ($bajas.Count) {
+    [void]$informe.Add("  Libros que ya no aparecen en el listado ($($bajas.Count)):")
+    foreach ($b in $bajas) { [void]$informe.Add("     - $($b.titulo)   [$($b.autor)]") }
+  }
+}
+[void]$informe.Add("")
+[void]$informe.Add("## Emparejados por similitud (revisar que el libro sea el correcto)")
+if ($sugerencias.Count) { foreach ($s in $sugerencias) { [void]$informe.Add("  $s") } } else { [void]$informe.Add("  (ninguno)") }
+[void]$informe.Add("")
+[void]$informe.Add("## Titulos reconstruidos (articulo recuperado del nombre del archivo)")
+if ($correcciones.Count) { foreach ($c in $correcciones) { [void]$informe.Add("  $c") } } else { [void]$informe.Add("  (ninguno)") }
+[void]$informe.Add("")
+[void]$informe.Add("## Archivos sin asignar a ningun libro")
+$resto = @()
+foreach ($k in ($grupos.Keys | Sort-Object)) {
+  foreach ($letra in ($grupos[$k].Keys | Sort-Object)) {
+    $g = $grupos[$k][$letra]
+    foreach ($n in @($g.img1) + @($g.img2) + @($g.docs)) { if (-not $usados.ContainsKey($n)) { $resto += $n } }
+  }
+}
+if ($resto.Count) { foreach ($n in ($resto | Sort-Object -Unique)) { [void]$informe.Add("  $n") } } else { [void]$informe.Add("  (ninguno)") }
+$informe -join "`r`n" | Set-Content -Path (Join-Path $Raiz 'datos\revision.txt') -Encoding UTF8
+
+$novedades = [ordered]@{
+  generado = (Get-Date).ToString('s')
+  primeraVez = -not $habiaAnterior
+  altas = @($altas)
+  bajas = @($bajas)
+}
+$novTmp = Join-Path $Raiz 'datos\novedades.json.tmp'
+[IO.File]::WriteAllText($novTmp, ($novedades | ConvertTo-Json -Depth 4 -Compress), (New-Object Text.UTF8Encoding $false))
+Move-Item -Force $novTmp (Join-Path $Raiz 'datos\novedades.json')
+
 $salida = [ordered]@{
   generado = (Get-Date).ToString('s')
   origenExcel = $OrigenExcel

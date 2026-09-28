@@ -121,6 +121,31 @@ Mientras una ruta esté mal, la web sigue mostrando el último catálogo
 bueno: no se queda en blanco.
 
 
+Revisar el catálogo (pantalla "Revisión")
+-----------------------------------------
+Entrando como socio, el botón "Revisión" (arriba a la derecha) abre una
+pantalla de trabajo con listas de libros:
+
+   · Nuevos en el listado  -> los que han aparecido desde la última importación
+   · Ya no están           -> desaparecieron del Excel (conviene revisarlo)
+   · Sin foto              -> pendientes de fotografiar
+   · Sin ubicación         -> sin estantería o balda asignada
+   · Ficha incompleta      -> sin autor ni editorial
+   · Sin estado            -> sin Disponible / Prestado / Donado
+
+Se puede filtrar por estantería y buscar por título o autor; al pulsar
+un libro se abre su ficha para completarla.
+
+El botón "Descargar lista (CSV)" guarda en un archivo la lista que estés
+viendo (con título, autor, editorial, categoría, estantería, balda y
+estado). Se abre con Excel y es perfecta para imprimir y llevarla a las
+estanterías.
+
+Qué cuenta como "nuevo" o "desaparecido": se compara el título y el
+autor (sin contar el artículo), no el número de fila, así que insertar
+filas en el Excel no genera falsos avisos.
+
+
 Notas
 -----
 · El Excel NO se modifica nunca: es la fuente original. Los cambios del
