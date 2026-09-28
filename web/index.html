@@ -144,13 +144,38 @@
     <label class="campo ancho"><span>Nueva contraseña</span><input type="password" id="ajusteNueva" autocomplete="new-password"></label>
     <p class="error" id="ajusteError" hidden></p>
     <div class="detalle-seccion">
-      <h3>Catálogo</h3>
-      <p class="nota">Se actualiza solo cuando cambias el Excel o añades fotos a la carpeta. También puedes forzarlo ahora:</p>
-      <button class="boton boton-contorno" type="button" id="btnForzarCatalogo">Actualizar el catálogo ahora</button>
+      <h3>Listado y carpeta de fotos</h3>
+      <p class="nota">El sitio lee el listado del Excel y la carpeta donde están las portadas e informaciones.
+        Si algún día los cambias de sitio, pon aquí las rutas nuevas y pulsa «Guardar rutas».</p>
+      <div class="campo ancho">
+        <span>Listado (Excel)</span>
+        <div class="ruta-fila">
+          <input type="text" id="rutaExcel" spellcheck="false">
+          <button class="boton boton-contorno" type="button" id="btnExaminarExcel">Examinar…</button>
+          <button class="boton boton-contorno" type="button" id="btnAbrirExcel">Abrir</button>
+        </div>
+      </div>
+      <div class="campo ancho">
+        <span>Carpeta de fotos e informaciones</span>
+        <div class="ruta-fila">
+          <input type="text" id="rutaLibros" spellcheck="false">
+          <button class="boton boton-contorno" type="button" id="btnExaminarLibros">Examinar…</button>
+          <button class="boton boton-contorno" type="button" id="btnAbrirLibros">Abrir</button>
+        </div>
+      </div>
+      <label class="campo-check">
+        <input type="checkbox" id="chkVigilar">
+        <span>Actualizar el catálogo solo cuando cambien los archivos</span>
+      </label>
+      <p class="nota" id="rutasEstado"></p>
+      <div class="formulario-acciones">
+        <button class="boton boton-contorno" type="button" id="btnForzarCatalogo">Actualizar ahora</button>
+        <button class="boton boton-principal" type="button" id="btnGuardarRutas">Guardar rutas</button>
+      </div>
     </div>
     <div class="formulario-acciones">
       <button class="boton boton-contorno" type="button" id="btnSalir">Cerrar sesión</button>
-      <button class="boton boton-principal" type="submit">Guardar cambios</button>
+      <button class="boton boton-principal" type="submit">Guardar contraseña</button>
     </div>
   </form>
 </dialog>
@@ -183,6 +208,23 @@
 </dialog>
 
 <datalist id="listaSignaturas"></datalist>
+
+<!-- ------------------------------ elegir carpeta o archivo ------------------------------ -->
+<dialog class="panel panel-pequeno" id="panelExplorar">
+  <div class="panel-cabecera">
+    <p class="panel-etiqueta" id="explorarTitulo">Elegir carpeta</p>
+    <button class="cerrar" data-cerrar aria-label="Cerrar">×</button>
+  </div>
+  <div class="panel-cuerpo">
+    <p class="ruta-actual" id="explorarRuta"></p>
+    <p class="explorar-resumen" id="explorarResumen"></p>
+    <div class="explorar-lista" id="explorarLista"></div>
+    <div class="formulario-acciones">
+      <button class="boton boton-contorno" type="button" id="btnExplorarArriba">Subir un nivel</button>
+      <button class="boton boton-principal" type="button" id="btnExplorarElegir">Elegir esta carpeta</button>
+    </div>
+  </div>
+</dialog>
 <div class="aviso-catalogo" id="avisoCatalogo" hidden>
   <span class="aviso-catalogo-punto"></span>
   <span id="avisoCatalogoTexto"></span>

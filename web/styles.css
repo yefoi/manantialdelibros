@@ -392,6 +392,32 @@ body.socio .solo-socios-detalle { display: block; }
 }
 .nota { color: var(--tinta-tenue); font-size: .82rem; margin: 0; }
 
+/* ---------------------------------------------------------------- explorador de carpetas */
+.ruta-fila { display: flex; gap: 8px; align-items: stretch; }
+.ruta-fila input {
+  flex: 1; min-width: 0; border: 1px solid var(--borde); background: var(--superficie);
+  border-radius: 9px; padding: 9px 11px; font-size: .84rem; outline: none;
+}
+.ruta-fila input:focus { border-color: var(--azul); }
+.ruta-fila .boton { padding: 8px 13px; font-size: .86rem; }
+.ruta-actual {
+  margin: 0 0 12px; font-size: .82rem; color: var(--tinta-suave); word-break: break-all;
+  background: var(--papel-2); border-radius: 8px; padding: 8px 11px;
+}
+.explorar-resumen { margin: -6px 0 12px; font-size: .8rem; color: var(--tinta-tenue); }
+.explorar-lista { max-height: 44vh; overflow: auto; border: 1px solid var(--borde); border-radius: 10px; margin-bottom: 16px; }
+.explorar-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 9px 12px; border: 0; border-bottom: 1px solid var(--borde);
+  background: transparent; cursor: pointer; font-size: .9rem;
+}
+.explorar-item:last-child { border-bottom: 0; }
+.explorar-item:hover { background: var(--papel-2); }
+.explorar-item.carpeta { font-weight: 600; }
+.explorar-item .icono { flex: none; color: var(--azul); font-size: 1rem; }
+.explorar-item .detalle { margin-left: auto; color: var(--tinta-tenue); font-size: .76rem; }
+.explorar-vacio { margin: 0; padding: 20px; text-align: center; color: var(--tinta-tenue); font-size: .88rem; }
+
 /* ---------------------------------------------------------------- avisos */
 .aviso-catalogo {
   position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 91;

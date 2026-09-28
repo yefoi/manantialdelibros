@@ -69,7 +69,7 @@ if (!ajustes.origenLibros) {
   escribirJson(AJUSTES_PATH, ajustes);
 }
 if (!ajustes.puerto) ajustes.puerto = 8080;
-const ORIGEN = ajustes.origenLibros;
+let ORIGEN = ajustes.origenLibros;
 
 // ------------------------------------------------------------ acceso
 function crearAccesoInicial() {
@@ -400,6 +400,97 @@ async function api(req, res, url) {
     if (importando) return enviarJson(res, 200, { ok: true, mensaje: 'Ya se esta actualizando' });
     actualizarCatalogo('peticion manual');
     return enviarJson(res, 200, { ok: true, mensaje: 'Actualizando el catalogo' });
+  }
+
+  // ---- rutas del Excel y de la carpeta de fotos
+  if (ruta === '/api/rutas' && metodo === 'GET') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    return enviarJson(res, 200, {
+      origenExcel: ajustes.origenExcel || '',
+      origenLibros: ajustes.origenLibros || '',
+      vigilar: ajustes.vigilar !== false,
+      existeExcel: !!(ajustes.origenExcel && fs.existsSync(ajustes.origenExcel)),
+      existeLibros: !!(ajustes.origenLibros && fs.existsSync(ajustes.origenLibros))
+    });
+  }
+  if (ruta === '/api/rutas' && metodo === 'POST') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    const cuerpo = await leerCuerpo(req, 64 * 1024);
+    let datos = {};
+    try { datos = JSON.parse(cuerpo.toString('utf8') || '{}'); } catch (e) { return enviarError(res, 400, 'Datos no validos'); }
+    const nuevoExcel = String(datos.origenExcel || '').trim();
+    const nuevaCarpeta = String(datos.origenLibros || '').trim();
+    if (!nuevoExcel || !fs.existsSync(nuevoExcel)) return enviarError(res, 400, 'No encuentro ese archivo de listado');
+    if (!nuevaCarpeta || !fs.existsSync(nuevaCarpeta)) return enviarError(res, 400, 'No encuentro esa carpeta');
+    if (!fs.statSync(nuevoExcel).isFile()) return enviarError(res, 400, 'El listado tiene que ser un archivo .xlsx');
+    if (!fs.statSync(nuevaCarpeta).isDirectory()) return enviarError(res, 400, 'La carpeta de libros no es valida');
+    const antes = { excel: ajustes.origenExcel, libros: ajustes.origenLibros };
+    ajustes.origenExcel = nuevoExcel;
+    ajustes.origenLibros = nuevaCarpeta;
+    if (typeof datos.vigilar === 'boolean') ajustes.vigilar = datos.vigilar;
+    escribirJson(AJUSTES_PATH, ajustes);
+    ORIGEN = ajustes.origenLibros;
+    registrar('Rutas cambiadas. Excel: ' + nuevoExcel + '  |  Fotos: ' + nuevaCarpeta);
+    let imagenes = 0, docs = 0;
+    try {
+      for (const n of fs.readdirSync(ORIGEN)) {
+        const e = path.extname(n).toLowerCase();
+        if (['.jpg', '.jpeg', '.png', '.webp'].includes(e)) imagenes++;
+        else if (['.docx', '.doc', '.pdf', '.txt', '.md'].includes(e)) docs++;
+      }
+    } catch (e) { }
+    actualizarCatalogo('rutas cambiadas');
+    return enviarJson(res, 200, { ok: true, origenExcel: nuevoExcel, origenLibros: nuevaCarpeta, imagenes, docs, antes });
+  }
+
+  // ---- explorador de carpetas del ordenador
+  if (ruta === '/api/explorar' && metodo === 'GET') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    const tipo = (url.searchParams.get('tipo') || 'carpeta').toLowerCase();
+    let base = (url.searchParams.get('ruta') || '').trim();
+    if (!base) {
+      const unidades = [];
+      for (let c = 65; c <= 90; c++) {
+        const l = String.fromCharCode(c) + ':';
+        try { if (fs.existsSync(l + '\\')) unidades.push({ n: l + '\\', r: l + '\\', d: true, t: 0 }); } catch (e) { }
+      }
+      return enviarJson(res, 200, { ruta: '', padre: null, entradas: unidades, tipo });
+    }
+    if (!fs.existsSync(base)) return enviarError(res, 400, 'No encuentro esa ruta en este ordenador');
+    try { if (!fs.statSync(base).isDirectory()) base = path.dirname(base); } catch (e) { return enviarError(res, 400, 'Ruta no valida'); }
+    let nombres = [];
+    try { nombres = fs.readdirSync(base); } catch (e) { return enviarError(res, 400, 'No se puede leer esa carpeta (¿permisos?)'); }
+    const extensiones = ['.xlsx', '.xls'];
+    const entradas = [];
+    let archivos = 0, subcarpetas = 0;
+    for (const n of nombres) {
+      if (n.charAt(0) === '$' || n === 'System Volume Information' || n.charAt(0) === '.') continue;
+      let s;
+      try { s = fs.statSync(path.join(base, n)); } catch (e) { continue; }
+      if (s.isDirectory()) {
+        subcarpetas++;
+        entradas.push({ n, r: path.join(base, n), d: true, t: 0 });
+      } else {
+        archivos++;
+        if (tipo === 'archivo' && extensiones.includes(path.extname(n).toLowerCase())) entradas.push({ n, r: path.join(base, n), d: false, t: s.size });
+      }
+      if (entradas.length >= 800) break;
+    }
+    entradas.sort((a, b) => (a.d === b.d ? a.n.localeCompare(b.n, 'es') : (a.d ? -1 : 1)));
+    const padre = path.dirname(base);
+    return enviarJson(res, 200, { ruta: base, padre: padre === base ? null : padre, entradas, tipo, archivos, subcarpetas });
+  }
+
+  // ---- abrir una carpeta en el Explorador de Windows (en el ordenador del servidor)
+  if (ruta === '/api/abrir' && metodo === 'POST') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    const cuerpo = await leerCuerpo(req, 8 * 1024);
+    let datos = {};
+    try { datos = JSON.parse(cuerpo.toString('utf8') || '{}'); } catch (e) { }
+    const destino = String(datos.ruta || '').trim();
+    if (!destino || !fs.existsSync(destino)) return enviarError(res, 400, 'Esa ruta no existe');
+    execFile('explorer.exe', [destino], { windowsHide: false }, () => { });
+    return enviarJson(res, 200, { ok: true });
   }
   if (ruta === '/api/libros' && metodo === 'GET') {
     const cat = cargarCatalogo();

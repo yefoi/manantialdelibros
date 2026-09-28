@@ -110,10 +110,20 @@ acentos, filtros por estado y categoría, ficha con galería de imágenes y acci
 
 | Quiero… | Cómo |
 |---|---|
-| Actualizar el catálogo | automático al guardar el Excel o cambiar las fotos (1–2 min); también `Ajustes → Actualizar el catálogo ahora` o `herramientas\importar.ps1` + `miniaturas.ps1` |
+| Actualizar el catálogo | automático al guardar el Excel o cambiar las fotos (1–2 min); también `Ajustes → Actualizar ahora` o `herramientas\importar.ps1` + `miniaturas.ps1` |
+| Cambiar de sitio el Excel o las fotos | `Ajustes → Listado y carpeta de fotos` (explorador incluido); reimporta solo |
 | Copia de seguridad | `herramientas\copia-seguridad.ps1` (ZIP con fecha en `copias\`) |
 | Arrancar solo al encender el PC | `herramientas\arranque-automatico.ps1` (`-Quitar` para desactivar) |
 | Cambiar el puerto | editar `puerto` en `datos\ajustes.json` |
+
+## Rutas configurables desde el sitio
+
+`datos\ajustes.json` guarda las rutas del Excel y de la carpeta de fotos. Desde la pantalla
+*Ajustes* (socios) se pueden ver y cambiar, con un explorador de carpetas propio
+(`/api/explorar`), validación (`/api/rutas`) y la opción de abrir la carpeta en el Explorador de
+Windows (`/api/abrir`). Al guardar, `app\server.js` reescribe `ajustes.json` y lanza una
+reimportación. Mientras una ruta no sea válida, el sitio sigue sirviendo el último catálogo bueno.
+
 
 ## Actualización automática
 

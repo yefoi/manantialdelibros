@@ -103,6 +103,24 @@ Para subir cambios que se hayan hecho en el programa:
       doble clic en "Subir cambios a GitHub.bat"
 
 
+Cambiar de sitio el Excel o la carpeta de fotos
+-----------------------------------------------
+Si algún día mueves el listado o la carpeta de fotos (a otra carpeta,
+a otro disco, a un pendrive...), no hace falta tocar archivos:
+
+   1. Muévelos con el Explorador de Windows.
+   2. Entra en el sitio como socio y abre "Ajustes".
+   3. Verás allí "✗ No encuentro el listado" o "✗ No encuentro la carpeta".
+   4. Pulsa "Examinar…", busca la nueva ubicación y elígela.
+   5. Pulsa "Guardar rutas": el catálogo se reimporta solo.
+
+El botón "Abrir" de cada ruta abre esa carpeta en el Explorador de
+Windows (en el ordenador donde está instalado el sitio).
+
+Mientras una ruta esté mal, la web sigue mostrando el último catálogo
+bueno: no se queda en blanco.
+
+
 Notas
 -----
 · El Excel NO se modifica nunca: es la fuente original. Los cambios del

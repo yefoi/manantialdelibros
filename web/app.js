@@ -311,6 +311,65 @@
     $('#ajusteUsuario').value = s.usuario || '';
   }
 
+  /* ------------------------------------------- rutas y explorador de carpetas */
+  let explorarTipo = 'carpeta';
+  let explorarDestino = '';
+
+  async function cargarRutas() {
+    try {
+      const r = await api('/api/rutas');
+      $('#rutaExcel').value = r.origenExcel || '';
+      $('#rutaLibros').value = r.origenLibros || '';
+      $('#chkVigilar').checked = r.vigilar !== false;
+      $('#rutasEstado').textContent = (r.existeExcel ? '✓ Listado encontrado' : '✗ No encuentro el listado') +
+        '   ·   ' + (r.existeLibros ? '✓ Carpeta encontrada' : '✗ No encuentro la carpeta');
+    } catch (e) { /* sin sesion */ }
+  }
+
+  async function abrirExplorador(tipo) {
+    explorarTipo = tipo;
+    $('#explorarTitulo').textContent = tipo === 'archivo' ? 'Elegir el archivo del listado' : 'Elegir la carpeta de fotos';
+    $('#btnExplorarElegir').hidden = tipo === 'archivo';
+    $('#panelExplorar').showModal();
+    const inicio = tipo === 'archivo' ? $('#rutaExcel').value : $('#rutaLibros').value;
+    await explorar(inicio || '');
+  }
+
+  async function explorar(ruta) {
+    let datos;
+    try {
+      datos = await api('/api/explorar?tipo=' + encodeURIComponent(explorarTipo) + '&ruta=' + encodeURIComponent(ruta || ''));
+    } catch (e) { toast(e.message, true); return; }
+    explorarDestino = datos.ruta || '';
+    $('#explorarRuta').textContent = datos.ruta || 'Este equipo';
+    $('#btnExplorarArriba').disabled = !datos.padre;
+    $('#btnExplorarArriba').dataset.padre = datos.padre || '';
+    if (!datos.ruta) {
+      $('#explorarResumen').textContent = 'Elige una unidad para empezar.';
+    } else {
+      $('#explorarResumen').textContent = 'Esta carpeta tiene ' + datos.archivos + ' archivos' +
+        (datos.subcarpetas ? ' y ' + datos.subcarpetas + ' subcarpetas' : ' y ninguna subcarpeta') +
+        (explorarTipo === 'archivo' ? ' · Archivos .xlsx encontrados: ' + datos.entradas.length : '');
+    }
+    $('#explorarLista').innerHTML = datos.entradas.length
+      ? datos.entradas.map((e) => `
+        <button class="explorar-item ${e.d ? 'carpeta' : 'archivo'}" type="button" data-ruta="${escap(e.r)}" data-carpeta="${e.d ? 1 : 0}">
+          <span class="icono">${e.d ? '📁' : '📄'}</span>
+          <span>${escap(e.n)}</span>
+          ${e.d ? '' : '<span class="detalle">' + Math.round(e.t / 1024) + ' KB</span>'}
+        </button>`).join('')
+      : '<p class="explorar-vacio">' +
+        (explorarTipo === 'carpeta'
+          ? 'No hay subcarpetas dentro. Si esta es la carpeta correcta, pulsa «Elegir esta carpeta».'
+          : 'No hay archivos .xlsx en esta carpeta.') + '</p>';
+  }
+
+  async function abrirEnWindows(ruta) {
+    if (!ruta) return;
+    try { await api('/api/abrir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ruta }) }); }
+    catch (e) { toast(e.message, true); }
+  }
+
   /* ------------------------------------------------------------ arranque */
   async function cargarSesion() {
     try { estado.sesion = await api('/api/estado'); } catch (e) { /* sin conexion */ }
@@ -489,7 +548,12 @@
 
     // acceso
     $('#btnAcceso').addEventListener('click', () => {
-      if (estado.sesion.logueado) { $('#panelAjustes').showModal(); $('#ajusteActual').focus(); return; }
+      if (estado.sesion.logueado) {
+        $('#panelAjustes').showModal();
+        cargarRutas();
+        $('#ajusteActual').focus();
+        return;
+      }
       $('#panelAcceso').showModal();
       $('#accesoUsuario').value = 'koine';
       $('#accesoClave').value = '';
@@ -512,6 +576,39 @@
     });
 
     // ajustes
+    $('#btnExaminarExcel').addEventListener('click', () => abrirExplorador('archivo'));
+    $('#btnExaminarLibros').addEventListener('click', () => abrirExplorador('carpeta'));
+    $('#btnAbrirExcel').addEventListener('click', () => abrirEnWindows($('#rutaExcel').value));
+    $('#btnAbrirLibros').addEventListener('click', () => abrirEnWindows($('#rutaLibros').value));
+    $('#btnExplorarArriba').addEventListener('click', () => explorar($('#btnExplorarArriba').dataset.padre || ''));
+    $('#btnExplorarElegir').addEventListener('click', () => {
+      $('#rutaLibros').value = explorarDestino;
+      $('#panelExplorar').close();
+    });
+    $('#explorarLista').addEventListener('click', (e) => {
+      const item = e.target.closest('.explorar-item');
+      if (!item) return;
+      if (item.dataset.carpeta === '1') { explorar(item.dataset.ruta); return; }
+      if (explorarTipo === 'archivo') { $('#rutaExcel').value = item.dataset.ruta; $('#panelExplorar').close(); }
+    });
+    $('#btnGuardarRutas').addEventListener('click', async () => {
+      const boton = $('#btnGuardarRutas');
+      boton.disabled = true;
+      try {
+        const r = await api('/api/rutas', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            origenExcel: $('#rutaExcel').value.trim(),
+            origenLibros: $('#rutaLibros').value.trim(),
+            vigilar: $('#chkVigilar').checked
+          })
+        });
+        $('#rutasEstado').textContent = '✓ Guardado: ' + r.imagenes + ' imágenes y ' + r.docs + ' documentos en la carpeta';
+        toast('Rutas guardadas. Actualizando el catálogo…');
+        setTimeout(revisarCatalogo, 1500);
+      } catch (ex) { toast(ex.message, true); }
+      boton.disabled = false;
+    });
     $('#btnForzarCatalogo').addEventListener('click', async () => {
       try {
         await api('/api/actualizar', { method: 'POST' });
