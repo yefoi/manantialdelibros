@@ -567,6 +567,44 @@ $novTmp = Join-Path $Raiz 'datos\novedades.json.tmp'
 [IO.File]::WriteAllText($novTmp, ($novedades | ConvertTo-Json -Depth 4 -Compress), (New-Object Text.UTF8Encoding $false))
 Move-Item -Force $novTmp (Join-Path $Raiz 'datos\novedades.json')
 
+# --------------------------------- reconciliar estados: "gana el ultimo cambio"
+# Si el estado del Excel no coincide con el que la web le habia pasado, es que
+# alguien lo ha cambiado a mano en el Excel: manda el Excel.
+$cambiosPath = Join-Path $Raiz 'datos\cambios.json'
+if (Test-Path $cambiosPath) {
+  try {
+    $cambios = Get-Content $cambiosPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $porId = @{}
+    foreach ($l in $libros) { $porId[$l.id] = $l }
+    $tocado = $false
+    $adoptados = 0
+    foreach ($id in @($cambios.PSObject.Properties.Name)) {
+      $c = $cambios.$id
+      $props = @($c.PSObject.Properties.Name)
+      if ($props -notcontains 'estado') { continue }
+      if ($props -notcontains '_excelEstado') { continue }   # cambio antiguo: se pasara al Excel desde la web
+      $l = $porId[$id]
+      if (-not $l) { continue }
+      if ([string]$l.estado -ne [string]$c._excelEstado) {
+        $c.PSObject.Properties.Remove('estado')
+        $c.PSObject.Properties.Remove('fechaSalida')
+        $c.PSObject.Properties.Remove('_excelEstado')
+        $tocado = $true
+        $adoptados++
+        if (($c.PSObject.Properties | Measure-Object).Count -eq 0) { $cambios.PSObject.Properties.Remove($id) }
+      }
+    }
+    if ($tocado) {
+      $tmp = "$cambiosPath.tmp"
+      [IO.File]::WriteAllText($tmp, ($cambios | ConvertTo-Json -Depth 4 -Compress), (New-Object Text.UTF8Encoding $false))
+      Move-Item -Force $tmp $cambiosPath
+      Escribir ("  estados adoptados del Excel (cambiados a mano): {0}" -f $adoptados)
+    }
+  } catch {
+    Escribir ("  (aviso: no se han podido conciliar los estados: {0})" -f $_.Exception.Message)
+  }
+}
+
 $salida = [ordered]@{
   generado = (Get-Date).ToString('s')
   origenExcel = $OrigenExcel

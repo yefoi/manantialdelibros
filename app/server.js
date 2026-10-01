@@ -174,6 +174,85 @@ function buscarLibro(id) {
   return cargarCatalogo().libros.find(l => l.id === id) || null;
 }
 
+// ------------------------------------------------------------ Excel: ida y vuelta
+// La web guarda los cambios en cambios.json y, ademas, los pasa al Excel
+// (columna ESTADO y F.SALIDA) para que el listado no se quede desfasado.
+const EXCEL_PENDIENTE_PATH = path.join(DATOS, 'excel-pendiente.json');
+let volcandoExcel = false;
+let ultimoIntentoExcel = 0;
+let retrasoExcel = 5000;   // si falla (Excel abierto), se espera mas antes de reintentar
+
+function leerColaExcel() { return leerJson(EXCEL_PENDIENTE_PATH, { items: [] }); }
+function escribirColaExcel(cola) { escribirJson(EXCEL_PENDIENTE_PATH, cola); }
+function hayPendientesExcel() { const c = leerColaExcel(); return !!(c.items && c.items.length); }
+
+function marcarPendienteExcel(id, fila, estado, fecha) {
+  const cola = leerColaExcel();
+  cola.items = (cola.items || []).filter(i => i.id !== id);
+  cola.items.push({ id, fila, estado, fecha: fecha || '' });
+  escribirColaExcel(cola);
+  volcarColaExcel();
+}
+
+function volcarColaExcel(cb) {
+  const cola = leerColaExcel();
+  const items = cola.items || [];
+  if (!items.length) { if (cb) cb(null); return; }
+  if (volcandoExcel) { if (cb) cb(null); return; }
+  if (Date.now() - ultimoIntentoExcel < retrasoExcel) { if (cb) cb(null); return; }
+  volcandoExcel = true;
+  ultimoIntentoExcel = Date.now();
+  ejecutarPowerShell('actualizar-excel.ps1', [], (err) => {
+    volcandoExcel = false;
+    if (err) {
+      retrasoExcel = 60000;
+      registrar('Aviso: no se han podido pasar los cambios al Excel (' +
+        String(err.message || err).split('\n')[0] + '). Se reintentara en un minuto.');
+      if (cb) cb(err);
+      return;
+    }
+    retrasoExcel = 5000;
+    const cambios = leerJson(CAMBIOS_PATH, {});
+    for (const it of items) {
+      if (cambios[it.id]) cambios[it.id]._excelEstado = it.estado;
+    }
+    escribirJson(CAMBIOS_PATH, cambios);
+    escribirColaExcel({ items: [] });
+    invalidarCatalogo();
+    // el cambio del Excel lo hemos hecho nosotros: que el vigilante no reimporte
+    try { firmaConocidaTexto = firmaActual().texto; } catch (e) { }
+    registrar('Cambios de estado pasados al Excel: ' + items.length + '.');
+    if (cb) cb(null);
+  });
+}
+
+// Cambios de estado hechos antes de esta funcion (sin marca _excelEstado):
+// se pasan al Excel para que quede al dia.
+function encolarCambiosAntiguos() {
+  const cambios = leerJson(CAMBIOS_PATH, {});
+  const base = leerJson(BIBLIOTECA_PATH, { libros: [] });
+  const porId = {};
+  for (const l of (base.libros || [])) porId[l.id] = l;
+  let n = 0;
+  for (const id of Object.keys(cambios)) {
+    const c = cambios[id];
+    if (!c || c.estado === undefined) continue;
+    if (c._excelEstado !== undefined) continue;
+    const l = porId[id];
+    if (!l || !l.fila || l.fila <= 0) continue;
+    const cola = leerColaExcel();
+    if ((cola.items || []).some(i => i.id === id)) continue;
+    cola.items = cola.items || [];
+    cola.items.push({ id, fila: l.fila, estado: c.estado, fecha: c.fechaSalida || '' });
+    escribirColaExcel(cola);
+    n++;
+  }
+  if (n) { registrar('Cambios de estado pendientes de pasar al Excel: ' + n); volcarColaExcel(); }
+}
+
+// "Gana el ultimo cambio": la conciliacion con el Excel la hace el importador
+// (herramientas\importar.ps1), que es quien lee el Excel de verdad.
+
 // ------------------------------------------------------------ miniaturas
 const miniaturasPendientes = new Set();
 let trabajosMiniatura = 0;
@@ -392,8 +471,19 @@ async function api(req, res, url) {
     return enviarJson(res, 200, {
       logueado: estaLogueado(req), usuario: usuarioActual(),
       total: cat.total, clavePorDefecto: !!acceso.clavePorDefecto, sitio: ajustes.nombreSitio || 'Manantial de Libros',
-      version: cat.version, actualizando: importando
+      version: cat.version, actualizando: importando,
+      excelPendiente: (leerColaExcel().items || []).length
     });
+  }
+  if (ruta === '/api/excel/volcar' && metodo === 'POST') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    ultimoIntentoExcel = 0;
+    retrasoExcel = 5000;
+    volcarColaExcel((err) => {
+      if (err) return enviarJson(res, 200, { ok: false, mensaje: 'No se ha podido (¿esta el Excel abierto?)', pendiente: (leerColaExcel().items || []).length });
+      return enviarJson(res, 200, { ok: true, pendiente: 0 });
+    });
+    return;
   }
   if (ruta === '/api/actualizar' && metodo === 'POST') {
     if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
@@ -603,6 +693,11 @@ async function api(req, res, url) {
       }
       if (!Object.keys(campos).length) return enviarError(res, 400, 'Nada que actualizar');
       guardarCambio(id, campos);
+      // el estado tambien se pasa al Excel (si el libro viene del listado)
+      if (campos.estado !== undefined && actual.fila) {
+        const despues = buscarLibro(id) || actual;
+        marcarPendienteExcel(id, actual.fila, campos.estado, despues.fechaSalida || '');
+      }
       registrar('Editado ' + id + ': ' + Object.keys(campos).join(', '));
       return enviarJson(res, 200, { ok: true, libro: buscarLibro(id) });
     }
@@ -861,6 +956,9 @@ servidor.listen(ajustes.puerto, '0.0.0.0', () => {
   }
   registrar('=====================================================');
   vigilarCambios();
+  // pasar al Excel los cambios de estado pendientes y reintentar de vez en cuando
+  setTimeout(encolarCambiosAntiguos, 8000);
+  setInterval(() => { if (hayPendientesExcel()) volcarColaExcel(); }, 60000);
 });
 servidor.on('error', (e) => {
   if (e.code === 'EADDRINUSE') {

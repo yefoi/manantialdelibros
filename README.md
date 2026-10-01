@@ -145,10 +145,23 @@ Windows (`/api/abrir`). Al guardar, `app\server.js` reescribe `ajustes.json` y l
 reimportación. Mientras una ruta no sea válida, el sitio sigue sirviendo el último catálogo bueno.
 
 
+## El Excel en las dos direcciones
+
+Los cambios de estado hechos en la web se escriben también en el Excel
+(`herramientas\actualizar-excel.ps1`):
+
+- **Web → Excel**: al cambiar un estado, el servidor apunta el cambio en `datos\excel-pendiente.json`
+  y actualiza la columna `ESTADO` (y `F.SALIDA`) de esa fila. Antes de escribir guarda una copia en
+  `datos\copias-excel\` (las 30 últimas) y no toca nada más del libro. Si el Excel está abierto
+  (bloqueado), el cambio se guarda igualmente en la web y se reintenta cada minuto; `POST /api/excel/volcar`
+  fuerza un intento y `GET /api/estado` informa de los pendientes.
+- **Excel → web**: al reimportar, `importar.ps1` compara el estado del Excel con el último que
+  escribió la web (campo `_excelEstado` de `cambios.json`). Si no coinciden es que alguien lo cambió
+  a mano: manda el Excel y el cambio de la web se retira («gana el último cambio»).
+
 ## Actualización automática
 
-`app\server.js` vigila cada 10 segundos el Excel y la carpeta de fotos. Cuando detecta un cambio
-(con 7 segundos de margen para que termine de copiarse), reimporta el catálogo y regenera las
+`app\server.js` vigila cada 10 segundos el Excel y la carpeta de fotos. Cuando detecta un cambio(con 7 segundos de margen para que termine de copiarse), reimporta el catálogo y regenera las
 miniaturas él solo, usando `herramientas\importar.ps1` y `herramientas\miniaturas.ps1`.
 El sitio sigue funcionando mientras tanto, y al terminar:
 

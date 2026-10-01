@@ -27,3 +27,5 @@ Thumbs.db
 desktop.ini
 ~$*
 *.tmp
+datos/excel-pendiente.json
+datos/copias-excel/

@@ -539,9 +539,19 @@
       $('#avisoCatalogoTexto').textContent = 'El catálogo se ha actualizado';
       $('#btnActualizarVista').hidden = false;
       caja.hidden = false;
-      return;
+    } else {
+      caja.hidden = true;
     }
-    caja.hidden = true;
+    // cambios de estado pendientes de pasar al Excel (solo socios)
+    const pendientes = Number(s.excelPendiente || 0);
+    const aviso = $('#excelPendiente');
+    if (aviso) {
+      aviso.hidden = !(estado.sesion.logueado && pendientes > 0);
+      aviso.textContent = pendientes > 0
+        ? 'Hay ' + pendientes + ' cambio(s) de estado pendientes de pasar al Excel (normalmente porque el Excel estaba abierto). Se reintenta solo cada minuto.'
+        : '';
+      $('#btnVolcarExcel').hidden = pendientes <= 0;
+    }
   }
 
   /* ------------------------------------------------------------ eventos */
@@ -616,7 +626,12 @@
 
       const botonEstado = e.target.closest('.estados button');
       if (botonEstado) {
-        try { await guardarLibro(l.id, { estado: botonEstado.dataset.estado }); pintarDetalle(); pintar(false); toast('Estado: ' + botonEstado.dataset.estado); }
+        try {
+          await guardarLibro(l.id, { estado: botonEstado.dataset.estado });
+          pintarDetalle(); pintar(false);
+          toast('Estado: ' + botonEstado.dataset.estado);
+          revisarCatalogo();
+        }
         catch (err) { toast(err.message, true); }
         return;
       }
@@ -764,6 +779,13 @@
         setTimeout(revisarCatalogo, 1500);
       } catch (ex) { toast(ex.message, true); }
       boton.disabled = false;
+    });
+    $('#btnVolcarExcel').addEventListener('click', async () => {
+      try {
+        const r = await api('/api/excel/volcar', { method: 'POST' });
+        toast(r.ok ? 'Cambios pasados al Excel' : (r.mensaje || 'No se ha podido pasar al Excel'), !r.ok);
+      } catch (ex) { toast(ex.message, true); }
+      revisarCatalogo();
     });
     $('#btnForzarCatalogo').addEventListener('click', async () => {
       try {

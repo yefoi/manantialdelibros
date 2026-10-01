@@ -170,6 +170,24 @@ autor (sin contar el artículo), no el número de fila, así que insertar
 filas en el Excel no genera falsos avisos.
 
 
+El Excel también se actualiza solo
+----------------------------------
+Cuando un socio cambia el estado de un libro en la web, ese cambio se
+escribe también en la columna ESTADO del Excel (y en F.SALIDA cuando pasa
+a "Donado"), para que el listado no se quede desfasado:
+
+   · antes de cada escritura se guarda una copia del Excel en
+     datos\copias-excel\ (se conservan las 30 últimas)
+   · si el Excel está abierto en ese momento, Windows lo bloquea: el
+     cambio se guarda igualmente en la web y se reintenta cada minuto.
+     En Ajustes aparece el aviso y un botón "Reintentar el Excel"
+   · solo se tocan las celdas ESTADO y F.SALIDA de esa fila; nada más
+     del Excel se modifica
+   · al revés también funciona: si alguien cambia un estado a mano en el
+     Excel, la web lo adopta en la siguiente importación. Gana siempre el
+     último cambio, venga de la web o del Excel
+
+
 Notas
 -----
 · El Excel NO se modifica nunca: es la fuente original. Los cambios del
