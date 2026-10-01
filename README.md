@@ -235,6 +235,13 @@ Se puede desactivar con `"vigilar": false` en `datos\ajustes.json`.
 
 - Los libros que aparecían fotografiados pero no estaban en el Excel se crean como fichas
   nuevas y llevan la etiqueta **Por completar**.
+- Los archivos se asocian de forma estable a su libro (`datos\asociaciones.json`): si cambias el
+  título (en el Excel o desde la web), las fotos y el documento no se pierden ni se crean fichas
+  duplicadas desde los archivos.
+- Con títulos repetidos (varios ejemplares), cada grupo de archivos (letras `a`, `b`, `c`…)
+  se asigna a la fila del Excel cuya **editorial y autor** coincidan con el `03.docx` de ese
+  grupo; si no hay datos suficientes, se reparte por el orden de las filas. Los archivos
+  compartidos por varios ejemplares no se asocian y salen avisados en el Diagnóstico.
 - `datos\revision.txt` lista las coincidencias "aproximadas" de la última importación, por si
   alguna hay que corregirla a mano.
 - El proyecto es privado en cuanto a datos: cada ordenador genera los suyos en `datos\`.

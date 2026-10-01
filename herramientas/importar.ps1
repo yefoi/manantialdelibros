@@ -310,9 +310,103 @@ foreach ($l in $libros) {
   }
 }
 
+# ------- titulos repetidos: cada grupo de archivos a la fila que diga su docx
+# Cuando hay varios ejemplares del mismo titulo (varias filas del Excel), en vez
+# de repartirlos solo por orden, se comparan editorial y autor del docx de cada
+# grupo con los de cada fila (solo columnas que ya existen en el Excel).
+$cache = @{}   # cache de docx leidos (se reutiliza al leer la informacion)
+function CamposDocxGrupo($g) {
+  if (-not $g -or -not $g.docs -or @($g.docs).Count -eq 0) { return $null }
+  $nombre = [string]$g.docs[0]
+  if ($cache.ContainsKey($nombre)) { return $cache[$nombre] }
+  $info = $null
+  try { $info = LeerDocx (Join-Path $OrigenLibros $nombre) $nombre } catch { $info = $null }
+  $cache[$nombre] = $info
+  return $info
+}
+function PuntuarDocx($libro, $info) {
+  if (-not $info) { return 0 }
+  $p = 0
+  if ($info.Editorial -and $libro.editorial -and (Normalizar ([string]$info.Editorial)) -eq (Normalizar ([string]$libro.editorial))) { $p += 3 }
+  if ($info.Autor -and $libro.autor -and (Normalizar ([string]$info.Autor)) -eq (Normalizar ([string]$libro.autor))) { $p += 2 }
+  return $p
+}
+
+$letraPorLibro = @{}    # id de libro -> letra decidida por los datos del docx
+$letrasTomadas = @{}    # "clave|letra" -> $true
+foreach ($k in $porClave.Keys) {
+  if (-not $grupos.ContainsKey($k)) { continue }
+  $companeros = $porClave[$k]
+  $letras = @($grupos[$k].Keys | Sort-Object)
+  if (@($companeros).Count -le 1 -or $letras.Count -le 1) { continue }
+  $pares = @()
+  foreach ($l in $companeros) {
+    foreach ($letra in $letras) {
+      $p = PuntuarDocx $l (CamposDocxGrupo $grupos[$k][$letra])
+      if ($p -ge 3) { $pares += [pscustomobject]@{ LibroId = $l.id; Letra = $letra; Puntos = $p } }
+    }
+  }
+  foreach ($par in @($pares | Sort-Object -Property Puntos -Descending)) {
+    if ($letraPorLibro.ContainsKey($par.LibroId)) { continue }
+    if ($letrasTomadas.ContainsKey("$k|$($par.Letra)")) { continue }
+    $letraPorLibro[$par.LibroId] = $par.Letra
+    $letrasTomadas["$k|$($par.Letra)"] = $true
+  }
+}
+
 $usados = @{}
 $conPortada = 0
+
+# --------------------- asociaciones estables: cada archivo sigue a su libro
+# Si un archivo ya estaba asignado a un libro en la importacion anterior, se le
+# vuelve a asignar aunque hayan cambiado el titulo: no se pierden fotos ni se
+# crean fichas duplicadas desde los archivos.
+$asocPath = Join-Path $Raiz 'datos\asociaciones.json'
+$asociaciones = @{}
+if (Test-Path $asocPath) {
+  try {
+    $aj = Get-Content $asocPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($prop in $aj.PSObject.Properties) { $asociaciones[$prop.Name] = [string]$prop.Value }
+  } catch { $asociaciones = @{} }
+}
+if ($asociaciones.Count) {
+  $porIdAsoc = @{}
+  foreach ($l in $libros) { $porIdAsoc[$l.id] = $l }
+  foreach ($k in $grupos.Keys) {
+    foreach ($letra in $grupos[$k].Keys) {
+      $g = $grupos[$k][$letra]
+      foreach ($n in @($g.img1)) {
+        if ($usados.ContainsKey($n)) { continue }
+        $idAsoc = [string]$asociaciones[$n]
+        if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
+        $l = $porIdAsoc[$idAsoc]
+        if (@($l.portadas).Count -eq 0) { $conPortada++ }
+        $l.portadas = @(@($l.portadas) + $n)
+        $usados[$n] = $true
+      }
+      foreach ($n in @($g.img2)) {
+        if ($usados.ContainsKey($n)) { continue }
+        $idAsoc = [string]$asociaciones[$n]
+        if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
+        $l = $porIdAsoc[$idAsoc]
+        $l.contraportadas = @(@($l.contraportadas) + $n)
+        $usados[$n] = $true
+      }
+      foreach ($n in @($g.docs)) {
+        if ($usados.ContainsKey($n)) { continue }
+        $idAsoc = [string]$asociaciones[$n]
+        if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
+        $l = $porIdAsoc[$idAsoc]
+        if (-not $l.infoArchivo) { $l.infoArchivo = $n; $usados[$n] = $true }
+      }
+    }
+  }
+  Escribir ("  archivos reasignados por su libro (asociacion estable): {0}" -f (@($usados.Keys).Count))
+}
+
 foreach ($l in $libros) {
+  # si ya tiene archivos por asociacion estable, no se toca
+  if (@($l.portadas).Count -gt 0 -or @($l.contraportadas).Count -gt 0 -or $l.infoArchivo) { continue }
   $k = ''
   foreach ($clave in (Claves $l.titulo)) { if ($grupos.ContainsKey($clave)) { $k = $clave; break } }
   if (-not $k) { continue }
@@ -321,8 +415,19 @@ foreach ($l in $libros) {
   $indice = [array]::IndexOf($companeros, $l)
   if ($indice -lt 0) { $indice = 0 }
   $letraAsignada = ''
-  if ($letras.Count -ge ($indice + 1)) { $letraAsignada = $letras[$indice] }
-  elseif ($indice -ge $letras.Count) { $letraAsignada = $letras[-1] }
+  if ($letraPorLibro.ContainsKey($l.id)) {
+    # decidida comparando la editorial y el autor del docx con los del Excel
+    $letraAsignada = $letraPorLibro[$l.id]
+  } else {
+    if ($letras.Count -ge ($indice + 1)) { $letraAsignada = $letras[$indice] }
+    elseif ($indice -ge $letras.Count) { $letraAsignada = $letras[-1] }
+    # no quitarle la letra que el docx ya le dio a otro ejemplar
+    if ($letrasTomadas.ContainsKey("$k|$letraAsignada")) {
+      $libre = @($letras | Where-Object { -not $letrasTomadas.ContainsKey("$k|$_") })
+      if ($libre.Count) { $letraAsignada = $libre[0] }
+    }
+    $letrasTomadas["$k|$letraAsignada"] = $true
+  }
   $g = $grupos[$k][$letraAsignada]
   if (-not $g) { continue }
   $l.portadas = @($g.img1)
@@ -486,9 +591,29 @@ Escribir ("  titulos corregidos: {0}" -f $correcciones.Count)
 
 # (el informe de revision se escribe al final, cuando ya se sabe que ha cambiado)
 
+# --------------------- guardar asociaciones archivo -> libro para la proxima vez
+# Si un archivo esta compartido por varios libros (varios ejemplares del mismo
+# titulo sin letra a/b/c), NO se asocia: es ambiguo y el Diagnostico avisara.
+try {
+  $usoArchivo = @{}
+  foreach ($l in $libros) {
+    foreach ($n in @(@($l.portadas)) + @($l.contraportadas) + @([string]$l.infoArchivo)) {
+      if ($n) { if ($usoArchivo.ContainsKey($n)) { $usoArchivo[$n]++ } else { $usoArchivo[$n] = 1 } }
+    }
+  }
+  $asocSalida = @{}
+  foreach ($l in $libros) {
+    foreach ($n in @(@($l.portadas)) + @($l.contraportadas) + @([string]$l.infoArchivo)) {
+      if ($n -and $usoArchivo[$n] -eq 1) { $asocSalida[[string]$n] = $l.id }
+    }
+  }
+  $asocTmp = "$asocPath.tmp"
+  [IO.File]::WriteAllText($asocTmp, ($asocSalida | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
+  Move-Item -Force $asocTmp $asocPath
+} catch { Escribir ("  (aviso: no se han podido guardar las asociaciones: {0})" -f $_.Exception.Message) }
+
 # ---------------------------------------------------------------- docx
 Escribir "Leyendo informacion (.docx)..."
-$cache = @{}
 $leidos = 0
 foreach ($l in $libros) {
   if (-not $l.infoArchivo) { continue }
@@ -605,9 +730,11 @@ foreach ($l in $libros) {
   }
 }
 foreach ($n in ($usoFotos.Keys | Sort-Object)) {
-  $ls = @($usoFotos[$n] | Sort-Object { $_.id } | Select-Object -Unique)
-  if ($ls.Count -gt 1) {
-    [void]$itemsCompartidas.Add((Item-Aviso $n (($ls | ForEach-Object { $_.titulo }) -join ' / ') $ls[0].id))
+  # se deduplica por id (Select-Object -Unique con objetos no sirve: mismo ToString)
+  $ids = @($usoFotos[$n] | ForEach-Object { $_.id } | Sort-Object -Unique)
+  if ($ids.Count -gt 1) {
+    $titulos = @($usoFotos[$n] | ForEach-Object { $_.titulo } | Sort-Object -Unique)
+    [void]$itemsCompartidas.Add((Item-Aviso $n ($titulos -join ' / ') $ids[0]))
   }
 }
 Nuevo-Aviso 'fotosCompartidas' 'Fotos usadas por mas de un libro' 'El mismo archivo aparece en varias fichas (normalmente falta el sufijo a/b de los tomos).' $itemsCompartidas
