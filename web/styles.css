@@ -498,10 +498,14 @@ body.socio .solo-socios-detalle { display: block; }
 .mapa-balda { padding: 6px 13px 0; }
 .mapa-balda + .mapa-balda { border-top: 1px dashed var(--borde); }
 .mapa-balda-titulo {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
   margin: 6px 0; color: var(--tinta-suave); font-size: .74rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: .05em;
 }
-.mapa-balda-titulo b { color: var(--azul); font-weight: 600; }
+.mapa-balda-titulo b {
+  color: var(--tinta-tenue); font-weight: 500; font-size: .72rem;
+  text-transform: none; letter-spacing: 0;
+}
 .mapa-libros { display: flex; flex-direction: column; gap: 3px; padding-bottom: 8px; }
 .mapa-libro {
   display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 6px 8px;

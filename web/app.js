@@ -608,9 +608,9 @@
           const etiqueta = (!balda || balda === '0')
             ? (est ? 'Sin balda concreta' : 'Sin ubicación')
             : 'Balda ' + escap(balda);
-          return '<div class="mapa-balda"><p class="mapa-balda-titulo">' + etiqueta +
-            ' <b>' + libros.length + '</b></p><div class="mapa-libros">' +
-            libros.map(mapaChip).join('') + '</div></div>';
+          return '<div class="mapa-balda"><p class="mapa-balda-titulo"><span>' + etiqueta + '</span>' +
+            '<b>' + libros.length + ' libro' + (libros.length === 1 ? '' : 's') + '</b></p>' +
+            '<div class="mapa-libros">' + libros.map(mapaChip).join('') + '</div></div>';
         }).join('') +
         '</details>';
     }).join('') : '<p class="revision-vacio">No hay libros que mostrar' + (filtro ? ' con ese filtro.' : '.') + '</p>';
