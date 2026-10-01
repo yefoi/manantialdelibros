@@ -35,7 +35,13 @@ Ya se enciende solo al arrancar Windows (minimizado, sin abrir el navegador).
 Si algún día hay que hacerlo a mano:
    1. Doble clic en:      "Iniciar Manantial de Libros.bat"
    2. Se abre el navegador en  http://localhost:8080
-   3. Para pararlo, cierra la ventana negra (o pulsa Ctrl+C).
+   3. Para pararlo, cierra la ventana negra (o pulsa Ctrl+C), o haz
+      doble clic en "Parar el servidor.bat".
+
+Si vas a apagar o suspender el ordenador y quieres dejar el sitio
+detenido antes, usa "Parar el servidor.bat". Al volver a encender el
+PC, el sitio arranca solo (si tienes activado el arranque automatico);
+si solo lo suspendiste, tendras que arrancarlo con el acceso directo.
 
 Que esté siempre disponible
 ----------------------------

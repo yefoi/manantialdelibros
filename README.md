@@ -122,6 +122,7 @@ deshacer se anota también). Se guarda en `datos\historial.json` (últimos 400 c
 |---|---|
 | Actualizar el catálogo | automático al guardar el Excel o cambiar las fotos (1–2 min); también `Ajustes → Actualizar ahora` o `herramientas\importar.ps1` + `miniaturas.ps1` |
 | Bajar la última versión del programa | doble clic en `Actualizar desde GitHub.bat` (no toca los datos y reinicia el servidor) |
+| Parar el servidor | doble clic en `Parar el servidor.bat` (útil antes de apagar o suspender el PC) |
 | Cambiar de sitio el Excel o las fotos | `Ajustes → Listado y carpeta de fotos` (explorador incluido); reimporta solo |
 | Revisar el catálogo | botón `Revisión` (socios): nuevos, desaparecidos, sin foto, sin ubicación… con filtro por estantería y descarga CSV |
 | Copia de seguridad | `herramientas\copia-seguridad.ps1` (ZIP con fecha en `copias\`) |
