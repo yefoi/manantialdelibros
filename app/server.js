@@ -1180,16 +1180,25 @@ async function api(req, res, url) {
 
     const base = baseDeArchivo(libro);
     if (!base) return enviarError(res, 400, 'El titulo no sirve para nombrar los archivos');
-    let choque = [];
+
+    // si ya hay ejemplares con ese titulo, se le asigna la siguiente letra
+    // libre ("" para el primero, luego a, b, c...), como en la carpeta
+    const usadas = new Set();
     try {
-      choque = fs.readdirSync(ORIGEN).filter((n) => {
-        const ln = n.toLowerCase();
-        return ln.startsWith(base + ' ') || ln.startsWith(base + '.');
-      });
+      const re = new RegExp('^' + base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+0?[123]([a-z])?\\.[a-z0-9]+$', 'i');
+      for (const n of fs.readdirSync(ORIGEN)) {
+        const m = re.exec(n);
+        if (m) usadas.add((m[1] || '').toLowerCase());
+      }
     } catch (e) { }
-    if (choque.length) {
-      return enviarError(res, 409, 'Ya hay archivos con ese nombre en la carpeta (' +
-        choque.slice(0, 3).join(', ') + '). Cambia el titulo o renombralos.');
+    let sufijo = '';
+    if (usadas.has('')) {
+      sufijo = '';
+      for (let i = 0; i < 26; i++) {
+        const letra = String.fromCharCode(97 + i);
+        if (!usadas.has(letra)) { sufijo = letra; break; }
+      }
+      if (!sufijo) return enviarError(res, 409, 'Ya hay demasiados ejemplares con ese titulo (a-z). Cambia el titulo.');
     }
 
     const portada = (libro.portadas || [])[0] || '';
@@ -1220,22 +1229,22 @@ async function api(req, res, url) {
       const copiados = [];
       try {
         if (portada) {
-          const nom = base + ' 01' + ext(portada);
+          const nom = base + ' 01' + sufijo + ext(portada);
           fs.copyFileSync(path.join(SUBIDAS, portada), path.join(ORIGEN, nom));
           copiados.push({ origen: portada, destino: nom });
         }
         if (contra) {
-          const nom = base + ' 02' + ext(contra);
+          const nom = base + ' 02' + sufijo + ext(contra);
           fs.copyFileSync(path.join(SUBIDAS, contra), path.join(ORIGEN, nom));
           copiados.push({ origen: contra, destino: nom });
         }
         const rutaInfo = info ? path.join(SUBIDAS, info) : '';
         if (rutaInfo && fs.existsSync(rutaInfo)) {
-          const nom = base + ' 03' + ext(info);
+          const nom = base + ' 03' + sufijo + ext(info);
           fs.copyFileSync(rutaInfo, path.join(ORIGEN, nom));
           copiados.push({ origen: info, destino: nom });
         } else if (libro.sinopsis || libro.paginas || libro.genero) {
-          const nom = base + ' 03.docx';
+          const nom = base + ' 03' + sufijo + '.docx';
           fs.writeFileSync(path.join(ORIGEN, nom), crearDocx({
             titulo: libro.titulo, autor: libro.autor, editorial: libro.editorial,
             paginas: libro.paginas, genero: libro.genero, sinopsis: libro.sinopsis, fechaPublicacion: ''
