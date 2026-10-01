@@ -122,11 +122,8 @@ try {
     if ($null -ne $campos.balda)         { $nueva = PonerCelda $nueva $filaNum 'G' ([string]$campos.balda) 'texto' }
     if ($null -ne $campos.estado)        { $nueva = PonerCelda $nueva $filaNum 'H' ([string]$campos.estado) 'texto' }
     if ($null -ne $campos.fechaSalida) {
-      $serial = ''
-      if ($campos.fechaSalida) {
-        $serial = [string][int]([datetime]::ParseExact([string]$campos.fechaSalida, 'yyyy-MM-dd', $null) - [datetime]'1899-12-30').TotalDays
-      }
-      $nueva = PonerCelda $nueva $filaNum 'J' $serial 'numero'
+      # las fechas van como texto (yyyy-MM-dd), igual que en el listado
+      $nueva = PonerCelda $nueva $filaNum 'J' ([string]$campos.fechaSalida) 'texto'
     }
     if ($null -ne $campos.observaciones) { $nueva = PonerCelda $nueva $filaNum 'K' ([string]$campos.observaciones) 'texto' }
     if ($nueva -ne $fila) {

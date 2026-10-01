@@ -80,6 +80,9 @@ function tamanoCarpeta(dir, profundidad) {
   })(dir, profundidad);
   return { bytes, archivos };
 }
+function fechaValida(v) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : '';
+}
 function ultimasLineasLog(cuantas) {
   try {
     const lineas = fs.readFileSync(LOG_PATH, 'utf8').split(/\r?\n/)
@@ -1013,6 +1016,8 @@ async function api(req, res, url) {
     const titulo = String(datos.titulo || '').trim();
     if (!titulo) return enviarError(res, 400, 'El titulo es obligatorio');
     const id = 'n' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
+    const estadoNuevo = ['Disponible', 'Prestado', 'Donado'].includes(datos.estado) ? datos.estado : 'Disponible';
+    const hoy = new Date().toISOString().slice(0, 10);
     const libro = {
       id, fila: 0, titulo,
       autor: String(datos.autor || '').trim(),
@@ -1020,8 +1025,9 @@ async function api(req, res, url) {
       signatura: String(datos.signatura || '').trim(),
       estanteria: String(datos.estanteria || '').trim(),
       balda: String(datos.balda || '').trim(),
-      estado: ['Disponible', 'Prestado', 'Donado'].includes(datos.estado) ? datos.estado : 'Disponible',
-      fechaEntrada: new Date().toISOString().slice(0, 10), fechaSalida: '',
+      estado: estadoNuevo,
+      fechaEntrada: fechaValida(datos.fechaEntrada) || hoy,
+      fechaSalida: estadoNuevo === 'Donado' ? (fechaValida(datos.fechaSalida) || hoy) : '',
       observaciones: String(datos.observaciones || '').trim(),
       portadas: [], contraportadas: [], paginas: String(datos.paginas || '').trim(),
       sinopsis: String(datos.sinopsis || '').trim(), genero: '', infoArchivo: '',

@@ -42,6 +42,11 @@
 
   const ETIQUETA_ESTADO = { Disponible: 'Disponible', Prestado: 'Prestado', Donado: 'Donado', '': 'Sin estado' };
 
+  const hoyISO = () => {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
+
   // "Estantería 7 · 5b"  (la balda 0 significa "sin balda concreta")
   const ubicacion = (l) => l.estanteria
     ? 'Estantería ' + l.estanteria + (l.balda && l.balda !== '0' ? ' · ' + l.balda : '')
@@ -1195,7 +1200,18 @@
     });
 
     // libro nuevo
-    $('#btnNuevoLibro').addEventListener('click', () => $('#panelNuevo').showModal());
+    $('#btnNuevoLibro').addEventListener('click', () => {
+      $('#formNuevo').reset();
+      $('#nuevoEntrada').value = hoyISO();
+      $('#campoNuevoSalida').hidden = true;
+      $('#panelNuevo').showModal();
+      setTimeout(() => $('#nuevoTitulo').focus(), 50);
+    });
+    $('#nuevoEstado').addEventListener('change', () => {
+      const donado = $('#nuevoEstado').value === 'Donado';
+      $('#campoNuevoSalida').hidden = !donado;
+      if (donado && !$('#nuevoSalida').value) $('#nuevoSalida').value = hoyISO();
+    });
     $('#formNuevo').addEventListener('submit', async (e) => {
       e.preventDefault();
       const err = $('#nuevoError');
@@ -1203,7 +1219,8 @@
       const campos = {
         titulo: $('#nuevoTitulo').value, autor: $('#nuevoAutor').value, editorial: $('#nuevoEditorial').value,
         signatura: $('#nuevoSignatura').value, estanteria: $('#nuevoEstanteria').value, balda: $('#nuevoBalda').value,
-        estado: $('#nuevoEstado').value, sinopsis: $('#nuevoSinopsis').value, observaciones: $('#nuevoObservaciones').value
+        estado: $('#nuevoEstado').value, sinopsis: $('#nuevoSinopsis').value, observaciones: $('#nuevoObservaciones').value,
+        fechaEntrada: $('#nuevoEntrada').value, fechaSalida: $('#nuevoSalida').value
       };
       try {
         const res = await api('/api/libros', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(campos) });

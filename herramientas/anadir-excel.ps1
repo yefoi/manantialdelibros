@@ -1,4 +1,4 @@
-# =====================================================================
+﻿# =====================================================================
 #  Manantial de Libros - anadir al Excel un libro creado desde la web
 #  Uso:  .\anadir-excel.ps1 -Datos <ruta.json>
 #  El JSON trae: titulo, autor, editorial, signatura, estanteria, balda,
@@ -27,11 +27,10 @@ function Celda([string]$col, [int]$fila, [string]$valor) {
   if ($null -eq $valor -or [string]$valor -eq '') { return '' }
   return '<c r="' + $col + $fila + '" t="inlineStr"><is><t>' + (EscaparXml ([string]$valor)) + '</t></is></c>'
 }
+# las fechas van como texto (yyyy-MM-dd), igual que en el listado
 function CeldaFecha([string]$col, [int]$fila, [string]$fecha) {
-  if (-not $fecha) { return '' }
-  $serial = ''
-  try { $serial = [string][int]([datetime]::ParseExact($fecha, 'yyyy-MM-dd', $null) - [datetime]'1899-12-30').TotalDays } catch { return '' }
-  return '<c r="' + $col + $fila + '"><v>' + $serial + '</v></c>'
+  if ($fecha -notmatch '^\d{4}-\d{2}-\d{2}$') { return '' }
+  return '<c r="' + $col + $fila + '" t="inlineStr"><is><t>' + $fecha + '</t></is></c>'
 }
 
 # --- copia de seguridad ---
