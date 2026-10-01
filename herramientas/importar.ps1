@@ -333,24 +333,33 @@ function PuntuarDocx($libro, $info) {
 }
 
 $letraPorLibro = @{}    # id de libro -> letra decidida por los datos del docx
-$letrasTomadas = @{}    # "clave|letra" -> $true
+$letrasTomadas = @{}    # "familia|letra" -> $true
+$familiasHechas = @{}   # el titulo con y sin articulo comparten la misma familia de archivos
 foreach ($k in $porClave.Keys) {
   if (-not $grupos.ContainsKey($k)) { continue }
   $companeros = $porClave[$k]
   $letras = @($grupos[$k].Keys | Sort-Object)
   if (@($companeros).Count -le 1 -or $letras.Count -le 1) { continue }
+  $firma = (@($companeros | ForEach-Object { $_.id }) | Sort-Object) -join ','
+  if ($familiasHechas.ContainsKey($firma)) { continue }
+  $familiasHechas[$firma] = $true
   $pares = @()
-  foreach ($l in $companeros) {
+  for ($i = 0; $i -lt @($companeros).Count; $i++) {
+    $l = $companeros[$i]
     foreach ($letra in $letras) {
       $p = PuntuarDocx $l (CamposDocxGrupo $grupos[$k][$letra])
-      if ($p -ge 3) { $pares += [pscustomobject]@{ LibroId = $l.id; Letra = $letra; Puntos = $p } }
+      if ($p -ge 3) { $pares += [pscustomobject]@{ LibroId = $l.id; Letra = $letra; Puntos = $p; Orden = $i } }
     }
   }
-  foreach ($par in @($pares | Sort-Object -Property Puntos -Descending)) {
+  # desempate determinista: mas puntos, luego orden de fila, luego letra
+  $ordenados = @($pares | Sort-Object -Property @{ Expression = 'Puntos'; Descending = $true },
+                                                 @{ Expression = 'Orden'; Descending = $false },
+                                                 @{ Expression = 'Letra'; Descending = $false })
+  foreach ($par in $ordenados) {
     if ($letraPorLibro.ContainsKey($par.LibroId)) { continue }
-    if ($letrasTomadas.ContainsKey("$k|$($par.Letra)")) { continue }
+    if ($letrasTomadas.ContainsKey("$firma|$($par.Letra)")) { continue }
     $letraPorLibro[$par.LibroId] = $par.Letra
-    $letrasTomadas["$k|$($par.Letra)"] = $true
+    $letrasTomadas["$firma|$($par.Letra)"] = $true
   }
 }
 
@@ -412,6 +421,7 @@ foreach ($l in $libros) {
   if (-not $k) { continue }
   $letras = @($grupos[$k].Keys | Sort-Object)
   $companeros = $porClave[$k]
+  $firma = (@($companeros | ForEach-Object { $_.id }) | Sort-Object) -join ','
   $indice = [array]::IndexOf($companeros, $l)
   if ($indice -lt 0) { $indice = 0 }
   $letraAsignada = ''
@@ -422,11 +432,11 @@ foreach ($l in $libros) {
     if ($letras.Count -ge ($indice + 1)) { $letraAsignada = $letras[$indice] }
     elseif ($indice -ge $letras.Count) { $letraAsignada = $letras[-1] }
     # no quitarle la letra que el docx ya le dio a otro ejemplar
-    if ($letrasTomadas.ContainsKey("$k|$letraAsignada")) {
-      $libre = @($letras | Where-Object { -not $letrasTomadas.ContainsKey("$k|$_") })
+    if ($letrasTomadas.ContainsKey("$firma|$letraAsignada")) {
+      $libre = @($letras | Where-Object { -not $letrasTomadas.ContainsKey("$firma|$_") })
       if ($libre.Count) { $letraAsignada = $libre[0] }
     }
-    $letrasTomadas["$k|$letraAsignada"] = $true
+    $letrasTomadas["$firma|$letraAsignada"] = $true
   }
   $g = $grupos[$k][$letraAsignada]
   if (-not $g) { continue }
