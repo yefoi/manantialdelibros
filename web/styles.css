@@ -506,6 +506,26 @@ body.socio .solo-socios-detalle { display: block; }
 }
 .mapa-libro-texto small { color: var(--tinta-suave); font-size: .75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ---------------------------------------------------------------- historial */
+.boton-pequeno { padding: 5px 11px; font-size: .8rem; }
+.historial-lista { max-height: 56vh; overflow: auto; border: 1px solid var(--borde); border-radius: 10px; }
+.historial-fila {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  border-bottom: 1px solid var(--borde); background: transparent;
+}
+.historial-fila:last-child { border-bottom: 0; }
+.historial-fila[data-id] { cursor: pointer; }
+.historial-fila[data-id]:hover { background: var(--papel-2); }
+.historial-fila.deshecho { opacity: .55; }
+.historial-texto { flex: 1; min-width: 0; }
+.historial-titulo { margin: 0; font-family: var(--titulo); font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.historial-detalle { margin: 1px 0 0; color: var(--tinta-suave); font-size: .8rem; }
+.historial-meta { margin: 2px 0 0; color: var(--tinta-tenue); font-size: .74rem; }
+.insignia-accion {
+  padding: 3px 9px; border-radius: 999px; background: var(--azul-claro); color: var(--azul-oscuro);
+  font-size: .72rem; font-weight: 600; white-space: nowrap; flex: none;
+}
+
 /* ---------------------------------------------------------------- avisos */
 .aviso-catalogo {
   position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 91;

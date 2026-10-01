@@ -108,6 +108,11 @@ El botón **Estanterías** abre el mapa de la biblioteca: estantería por estant
 balda, con el estado de cada libro (los donados no aparecen, porque ya no están en las
 estanterías); al pulsar un libro se abre su ficha. Incluye buscador propio.
 
+Los socios tienen además **Historial**: cada cambio de estado, de ficha, de archivos, alta o
+borrado queda anotado con el usuario, el dispositivo (IP), la fecha y el detalle, y la mayoría
+se pueden **deshacer** con un botón (el cambio original queda marcado como deshecho y el
+deshacer se anota también). Se guarda en `datos\historial.json` (últimos 400 cambios).
+
 ---
 
 ## Tareas habituales
@@ -170,6 +175,23 @@ Los cambios de estado hechos en la web se escriben también en el Excel
 - **Excel → web**: al reimportar, `importar.ps1` compara el estado del Excel con el último que
   escribió la web (campo `_excelEstado` de `cambios.json`). Si no coinciden es que alguien lo cambió
   a mano: manda el Excel y el cambio de la web se retira («gana el último cambio»).
+
+## La web actualiza el documento del libro (.docx)
+
+Al guardar una ficha desde el sitio, además de `datos\cambios.json` se reescribe el documento
+de información del libro:
+
+- si el libro ya tenía un `.docx` en la carpeta de fotos, se actualiza con el mismo nombre;
+- si no tenía documento, se crea `<título> 03.docx` en la carpeta de fotos;
+- si es un libro añadido desde el sitio, el documento se guarda en `datos\subidas\`;
+- los `.pdf` y `.txt` originales no se tocan.
+
+El documento conserva el formato que lee el importador (`TITULO:`, `AUTOR:`, `PAGINAS:`,
+`EDITORIAL:`, `GENERO:`, `FECHA DE PUBLICACION:`, `SINOPSIS:`). Se puede desactivar con
+`"sincronizarDocx": false` en `datos\ajustes.json`.
+
+Ojo: si el `.docx` está abierto en Word/LibreOffice, puede estar bloqueado; en ese caso la
+ficha se guarda igual y el documento se actualizará en el siguiente guardado.
 
 ## Actualización automática
 

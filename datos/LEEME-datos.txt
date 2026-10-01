@@ -10,6 +10,7 @@ En esta carpeta vive todo lo que el sitio guarda en este ordenador.
   · revision.txt     avisos de la última importación (para revisar a mano)
   · novedades.json   libros nuevos y desaparecidos respecto a la importación anterior
   · diagnostico.json avisos sobre nombres y asignación de los archivos de fotos
+  · historial.json   cambios hechos desde el sitio (quién, qué y cuándo), para deshacer
 
 Para regenerar biblioteca.json y miniaturas/ (por ejemplo, en otro ordenador):
 

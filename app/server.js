@@ -22,6 +22,7 @@ const ACCESO_PATH = path.join(DATOS, 'acceso.json');
 const BIBLIOTECA_PATH = path.join(DATOS, 'biblioteca.json');
 const CAMBIOS_PATH = path.join(DATOS, 'cambios.json');
 const NUEVOS_PATH = path.join(DATOS, 'nuevos.json');
+const HISTORIAL_PATH = path.join(DATOS, 'historial.json');
 const LOG_PATH = path.join(DATOS, 'registro.log');
 
 const MAX_SUBIDA = 30 * 1024 * 1024;   // 30 MB
@@ -174,6 +175,45 @@ function buscarLibro(id) {
   return cargarCatalogo().libros.find(l => l.id === id) || null;
 }
 
+// ------------------------------------------------------------ historial de cambios
+// Guarda quien (usuario y dispositivo) cambio que y cuando, para poder deshacer.
+const MAX_HISTORIAL = 400;
+function leerHistorial() { return leerJson(HISTORIAL_PATH, { siguiente: 1, cambios: [] }); }
+function ipDe(req) {
+  const ip = (req && req.socket && req.socket.remoteAddress) || '';
+  return String(ip).replace(/^::ffff:/, '');
+}
+function anotarCambio(req, accion, id, titulo, detalle, antes, despues) {
+  const h = leerHistorial();
+  const n = Number(h.siguiente) || 1;
+  h.siguiente = n + 1;
+  h.cambios.push({
+    n, fecha: new Date().toISOString(), usuario: usuarioActual(), desde: ipDe(req),
+    accion, id: id || '', titulo: titulo || '', detalle: detalle || '',
+    antes: antes === undefined ? null : antes,
+    despues: despues === undefined ? null : despues,
+    deshecho: false
+  });
+  if (h.cambios.length > MAX_HISTORIAL) h.cambios = h.cambios.slice(-MAX_HISTORIAL);
+  escribirJson(HISTORIAL_PATH, h);
+  return n;
+}
+function camposAntesDe(libro, campos) {
+  const antes = {};
+  for (const k of Object.keys(campos)) antes[k] = libro[k] === undefined ? '' : libro[k];
+  return antes;
+}
+function eliminarLibroNuevo(id) {
+  // se conservan los archivos subidos (datos/subidas y miniaturas) para poder deshacer
+  let nuevos = leerJson(NUEVOS_PATH, []);
+  nuevos = nuevos.filter(l => l.id !== id);
+  escribirJson(NUEVOS_PATH, nuevos);
+  const cambios = leerJson(CAMBIOS_PATH, {});
+  delete cambios[id];
+  escribirJson(CAMBIOS_PATH, cambios);
+  invalidarCatalogo();
+}
+
 // ------------------------------------------------------------ Excel: ida y vuelta
 // La web guarda los cambios en cambios.json y, ademas, los pasa al Excel
 // (columna ESTADO y F.SALIDA) para que el listado no se quede desfasado.
@@ -320,14 +360,15 @@ function textoDeDocumentoXml(xml) {
     parrafos.push(desescaparXml(t));
   }
   const lineas = parrafos.map(p => p.trim());
-  const campos = { titulo: '', autor: '', paginas: '', editorial: '', sinopsis: '', genero: '' };
+  const campos = { titulo: '', autor: '', paginas: '', editorial: '', sinopsis: '', genero: '', fechaPublicacion: '' };
   const alias = {
     'TITULO': 'titulo', 'TITUTLO': 'titulo', 'TITULO SEGUNDO': 'titulo',
     'AUTOR': 'autor',
     'PAGINA': 'paginas', 'PAGINAS': 'paginas', 'PAGINA S': 'paginas',
     'EDITORIAL': 'editorial', 'EDITORIA': 'editorial', 'EDIORIAL': 'editorial', 'EDITOR': 'editorial',
     'SINOPSIS': 'sinopsis', 'SISNOPSIS': 'sinopsis', 'SIPNOSIS': 'sinopsis', 'SISNOPSI': 'sinopsis', 'RESENAS': 'sinopsis',
-    'GENERO': 'genero'
+    'GENERO': 'genero',
+    'FECHA DE PUBLICACION': 'fechaPublicacion'
   };
   let actual = '';
   for (const linea of lineas) {
@@ -347,6 +388,154 @@ function textoDeDocumentoXml(xml) {
 function desescaparXml(s) {
   return String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'").replace(/&#(\d+);/g, (x, d) => String.fromCharCode(+d)).replace(/&amp;/g, '&');
+}
+
+// ------------------------------------------------------------ docx: escritura
+function escaparXml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+function crc32(buf) {
+  let tabla = crc32.tabla;
+  if (!tabla) {
+    tabla = crc32.tabla = new Int32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      tabla[n] = c;
+    }
+  }
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = tabla[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zipSimple(entradas) {
+  // ZIP sin compresion (metodo "almacenado"), suficiente para un .docx minimo
+  const partes = [], central = [];
+  let offset = 0;
+  for (const e of entradas) {
+    const nombre = Buffer.from(e.nombre, 'utf8');
+    const crc = crc32(e.datos);
+    const cab = Buffer.alloc(30);
+    cab.writeUInt32LE(0x04034b50, 0);
+    cab.writeUInt16LE(20, 4);
+    cab.writeUInt16LE(0x0800, 6);           // nombres en UTF-8
+    cab.writeUInt16LE(0, 8);                // sin compresion
+    cab.writeUInt16LE(0, 10);
+    cab.writeUInt16LE(33, 12);              // fecha 1980-01-01
+    cab.writeUInt32LE(crc, 14);
+    cab.writeUInt32LE(e.datos.length, 18);
+    cab.writeUInt32LE(e.datos.length, 22);
+    cab.writeUInt16LE(nombre.length, 26);
+    cab.writeUInt16LE(0, 28);
+    partes.push(cab, nombre, e.datos);
+    const cen = Buffer.alloc(46);
+    cen.writeUInt32LE(0x02014b50, 0);
+    cen.writeUInt16LE(20, 4); cen.writeUInt16LE(20, 6);
+    cen.writeUInt16LE(0x0800, 8);
+    cen.writeUInt16LE(0, 10);
+    cen.writeUInt16LE(0, 12); cen.writeUInt16LE(33, 14);
+    cen.writeUInt32LE(crc, 16);
+    cen.writeUInt32LE(e.datos.length, 20);
+    cen.writeUInt32LE(e.datos.length, 24);
+    cen.writeUInt16LE(nombre.length, 28);
+    cen.writeUInt16LE(0, 30); cen.writeUInt16LE(0, 32);
+    cen.writeUInt16LE(0, 34); cen.writeUInt16LE(0, 36);
+    cen.writeUInt32LE(0, 38);
+    cen.writeUInt32LE(offset, 42);
+    central.push(cen, nombre);
+    offset += cab.length + nombre.length + e.datos.length;
+  }
+  const cd = Buffer.concat(central);
+  const fin = Buffer.alloc(22);
+  fin.writeUInt32LE(0x06054b50, 0);
+  fin.writeUInt16LE(0, 4); fin.writeUInt16LE(0, 6);
+  fin.writeUInt16LE(entradas.length, 8);
+  fin.writeUInt16LE(entradas.length, 10);
+  fin.writeUInt32LE(cd.length, 12);
+  fin.writeUInt32LE(offset, 16);
+  fin.writeUInt16LE(0, 20);
+  return Buffer.concat([Buffer.concat(partes), cd, fin]);
+}
+function crearDocx(campos) {
+  const lineas = [];
+  const pon = (etiqueta, valor) => {
+    const v = String(valor == null ? '' : valor).replace(/\s+/g, ' ').trim();
+    if (v) lineas.push(etiqueta + ': ' + v);
+  };
+  pon('TITULO', campos.titulo);
+  pon('AUTOR', campos.autor);
+  pon('PAGINAS', campos.paginas);
+  pon('EDITORIAL', campos.editorial);
+  pon('GENERO', campos.genero);
+  pon('FECHA DE PUBLICACION', campos.fechaPublicacion);
+  pon('SINOPSIS', campos.sinopsis);
+  const parrafos = lineas.map(l => '<w:p><w:r><w:t xml:space="preserve">' + escaparXml(l) + '</w:t></w:r></w:p>').join('');
+  const documento = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+    parrafos + '</w:body></w:document>';
+  const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Default Extension="xml" ContentType="application/xml"/>' +
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
+  const rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
+  return zipSimple([
+    { nombre: '[Content_Types].xml', datos: Buffer.from(contentTypes, 'utf8') },
+    { nombre: '_rels/.rels', datos: Buffer.from(rels, 'utf8') },
+    { nombre: 'word/document.xml', datos: Buffer.from(documento, 'utf8') }
+  ]);
+}
+function limpiarNombreArchivo(s) {
+  return String(s == null ? '' : s).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+function baseDeArchivo(libro) {
+  const portada = (libro.portadas || [])[0] || '';
+  if (portada) {
+    const base = portada.replace(/\.[a-z0-9]+$/i, '').replace(/\s+\d{1,2}[a-z]?$/i, '').trim();
+    if (base) return base;
+  }
+  const t = String(libro.titulo || 'libro').replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
+  return limpiarNombreArchivo(t.toLowerCase()) || 'libro';
+}
+// Guarda los datos de la ficha en el .docx del libro (en la carpeta de fotos,
+// o en datos/subidas si el libro se añadió desde el sitio). Devuelve el nombre
+// del documento actualizado, o '' si no se ha podido o no procede.
+function sincronizarDocx(libro) {
+  if (!libro || ajustes.sincronizarDocx === false) return '';
+  const info = String(libro.infoArchivo || '');
+  const campos = {
+    titulo: libro.titulo, autor: libro.autor, editorial: libro.editorial,
+    paginas: libro.paginas, genero: libro.genero, sinopsis: libro.sinopsis, fechaPublicacion: ''
+  };
+  const enSubidas = info ? path.join(SUBIDAS, info) : '';
+  const enOrigen = info ? path.join(ORIGEN, info) : '';
+  let destino = '', nombre = '';
+  if (info.toLowerCase().endsWith('.docx') && enSubidas && fs.existsSync(enSubidas)) {
+    destino = enSubidas; nombre = info;
+  } else if (info.toLowerCase().endsWith('.docx') && enOrigen && fs.existsSync(enOrigen)) {
+    destino = enOrigen; nombre = info;
+    try { campos.fechaPublicacion = extraerDocx(fs.readFileSync(enOrigen)).fechaPublicacion || ''; } catch (e) { }
+  } else if (info && !info.toLowerCase().endsWith('.docx')) {
+    return '';   // pdf/txt de origen: no se tocan
+  } else if (ORIGEN && fs.existsSync(ORIGEN) && libro.origen !== 'nuevo' && libro.origen !== 'huerfano') {
+    nombre = limpiarNombreArchivo(baseDeArchivo(libro) + ' 03.docx');
+    destino = path.join(ORIGEN, nombre);
+  } else {
+    nombre = libro.id + '-info-' + Date.now().toString(36) + '.docx';
+    destino = path.join(SUBIDAS, nombre);
+  }
+  try {
+    fs.writeFileSync(destino, crearDocx(campos));
+    registrar('Documento de ficha actualizado: ' + destino);
+    return nombre;
+  } catch (e) {
+    registrar('Aviso: no se ha podido actualizar el documento de ' + libro.id + ': ' + e.message);
+    return '';
+  }
 }
 
 // ------------------------------------------------------------ multipart
@@ -506,6 +695,52 @@ async function api(req, res, url) {
     return enviarJson(res, 200, diag);
   }
 
+  // ---- historial de cambios (quien cambio que y cuando) y deshacer
+  if (ruta === '/api/historial' && metodo === 'GET') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    return enviarJson(res, 200, leerHistorial());
+  }
+  if (ruta === '/api/historial/deshacer' && metodo === 'POST') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    const cuerpo = await leerCuerpo(req, 64 * 1024);
+    let datos = {};
+    try { datos = JSON.parse(cuerpo.toString('utf8') || '{}'); } catch (e) { return enviarError(res, 400, 'Datos no validos'); }
+    const h = leerHistorial();
+    const e = (h.cambios || []).find(c => c.n === Number(datos.n));
+    if (!e) return enviarError(res, 404, 'Ese cambio no esta en el historial');
+    if (e.deshecho) return enviarError(res, 400, 'Ese cambio ya se deshizo');
+    if (e.accion === 'deshacer' || e.accion === 'clave' ||
+        (!e.antes && e.accion !== 'alta' && e.accion !== 'borrado')) {
+      return enviarError(res, 400, 'Este cambio no se puede deshacer');
+    }
+    let libro = null;
+    if (e.accion === 'alta') {
+      const l = buscarLibro(e.id);
+      if (!l) return enviarError(res, 400, 'Ese libro ya no existe');
+      if (l.origen !== 'nuevo') return enviarError(res, 400, 'Solo se pueden deshacer las altas hechas desde el sitio');
+      eliminarLibroNuevo(e.id);
+    } else if (e.accion === 'borrado') {
+      if (buscarLibro(e.id)) return enviarError(res, 400, 'Ese libro ya volvio al catalogo');
+      const nuevos = leerJson(NUEVOS_PATH, []);
+      nuevos.push(e.antes);
+      escribirJson(NUEVOS_PATH, nuevos);
+      invalidarCatalogo();
+      libro = buscarLibro(e.id);
+    } else {
+      guardarCambio(e.id, e.antes);
+      libro = buscarLibro(e.id);
+      // si era un estado y el libro viene del listado, tambien se devuelve en el Excel
+      if (e.accion === 'estado' && libro && libro.fila && e.antes.estado !== undefined) {
+        marcarPendienteExcel(libro.id, libro.fila, libro.estado, libro.fechaSalida || '');
+      }
+    }
+    e.deshecho = true;
+    escribirJson(HISTORIAL_PATH, h);
+    anotarCambio(req, 'deshacer', e.id, e.titulo, 'Deshecho el cambio #' + e.n + ' (' + e.detalle + ')', e.despues, e.antes);
+    registrar('Deshecho el cambio #' + e.n + ' (' + e.accion + ' de ' + e.id + ')');
+    return enviarJson(res, 200, { ok: true, libro });
+  }
+
   // ---- rutas del Excel y de la carpeta de fotos
   if (ruta === '/api/rutas' && metodo === 'GET') {
     if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
@@ -638,6 +873,7 @@ async function api(req, res, url) {
     if (datos.usuario && String(datos.usuario).trim()) acceso.usuario = String(datos.usuario).trim().slice(0, 40);
     acceso.secreto = crypto.randomBytes(32).toString('hex');
     escribirJson(ACCESO_PATH, acceso);
+    anotarCambio(req, 'clave', '', '', 'Contraseña cambiada', null, null);
     registrar('Contrasena cambiada');
     return enviarJson(res, 200, { ok: true, usuario: acceso.usuario }, {
       'Set-Cookie': 'koine=' + crearToken() + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + Math.floor(DURACION_SESION / 1000)
@@ -667,10 +903,15 @@ async function api(req, res, url) {
       sinopsis: String(datos.sinopsis || '').trim(), genero: '', infoArchivo: '',
       creado: new Date().toISOString(), origen: 'nuevo'
     };
+    if (libro.sinopsis || libro.paginas) {
+      const docNuevo = sincronizarDocx(libro);
+      if (docNuevo) libro.infoArchivo = docNuevo;
+    }
     const nuevos = leerJson(NUEVOS_PATH, []);
     nuevos.push(libro);
     escribirJson(NUEVOS_PATH, nuevos);
     invalidarCatalogo();
+    anotarCambio(req, 'alta', id, titulo, 'Libro añadido al catálogo', null, libro);
     registrar('Libro anadido: ' + titulo);
     return enviarJson(res, 201, { ok: true, libro });
   }
@@ -699,31 +940,34 @@ async function api(req, res, url) {
         if (datos.estado === 'Disponible') { campos.fechaSalida = ''; }
       }
       if (!Object.keys(campos).length) return enviarError(res, 400, 'Nada que actualizar');
+      const esEstado = Object.keys(campos).every(k => k === 'estado' || k === 'fechaSalida');
+      // los cambios de ficha se escriben tambien en el .docx del libro
+      let docxActualizado = '';
+      if (!esEstado) {
+        docxActualizado = sincronizarDocx(Object.assign({}, actual, campos));
+        if (docxActualizado && docxActualizado !== actual.infoArchivo) campos.infoArchivo = docxActualizado;
+      }
+      const antes = camposAntesDe(actual, campos);
       guardarCambio(id, campos);
+      const detalle = esEstado
+        ? (String(antes.estado || 'sin estado') + ' -> ' + String(campos.estado || 'sin estado'))
+        : Object.keys(campos).join(', ');
+      anotarCambio(req, esEstado ? 'estado' : 'ficha', id, actual.titulo, detalle, antes, campos);
       // el estado tambien se pasa al Excel (si el libro viene del listado)
       if (campos.estado !== undefined && actual.fila) {
         const despues = buscarLibro(id) || actual;
         marcarPendienteExcel(id, actual.fila, campos.estado, despues.fechaSalida || '');
       }
       registrar('Editado ' + id + ': ' + Object.keys(campos).join(', '));
-      return enviarJson(res, 200, { ok: true, libro: buscarLibro(id) });
+      return enviarJson(res, 200, { ok: true, libro: buscarLibro(id), docx: docxActualizado });
     }
     if (metodo === 'DELETE') {
       if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
       const libro = buscarLibro(id);
       if (!libro) return enviarError(res, 404, 'Libro no encontrado');
       if (libro.origen !== 'nuevo') return enviarError(res, 400, 'Solo se pueden eliminar los libros añadidos desde el sitio');
-      let nuevos = leerJson(NUEVOS_PATH, []);
-      nuevos = nuevos.filter(l => l.id !== id);
-      escribirJson(NUEVOS_PATH, nuevos);
-      const cambios = leerJson(CAMBIOS_PATH, {});
-      delete cambios[id];
-      escribirJson(CAMBIOS_PATH, cambios);
-      for (const nombre of [].concat(libro.portadas || [], libro.contraportadas || [], libro.infoArchivo ? [libro.infoArchivo] : [])) {
-        try { const p = path.join(SUBIDAS, nombre); if (fs.existsSync(p)) fs.unlinkSync(p); } catch (e) { }
-        try { const p = path.join(MINIATURAS, nombre + '.jpg'); if (fs.existsSync(p)) fs.unlinkSync(p); } catch (e) { }
-      }
-      invalidarCatalogo();
+      anotarCambio(req, 'borrado', id, libro.titulo, 'Libro eliminado del catálogo', libro, null);
+      eliminarLibroNuevo(id);
       registrar('Libro eliminado: ' + id + ' (' + libro.titulo + ')');
       return enviarJson(res, 200, { ok: true });
     }
@@ -775,7 +1019,10 @@ async function api(req, res, url) {
         campos[campo] = lista;
         setTimeout(() => generarMiniatura(nombre), 200);
       }
+      const antes = camposAntesDe(libro, campos);
       guardarCambio(id, campos);
+      anotarCambio(req, 'media', id, libro.titulo, 'Subido ' + tipoTxt + ': ' + nombre +
+        ' (' + Math.round(archivo.datos.length / 1024) + ' KB)', antes, campos);
       registrar('Subido ' + tipoTxt + ' de ' + id + ' (' + Math.round(archivo.datos.length / 1024) + ' KB)');
       return enviarJson(res, 200, { ok: true, archivo: nombre, libro: buscarLibro(id) });
     }
@@ -789,15 +1036,10 @@ async function api(req, res, url) {
       }
       if (libro.infoArchivo === nombre) campos.infoArchivo = '';
       if (!Object.keys(campos).length) return enviarError(res, 400, 'Ese archivo no pertenece al libro');
+      const antes = camposAntesDe(libro, campos);
       guardarCambio(id, campos);
-      try {
-        const enSubidas = path.join(SUBIDAS, nombre);
-        if (fs.existsSync(enSubidas)) fs.unlinkSync(enSubidas);
-      } catch (e) { }
-      try {
-        const mini = path.join(MINIATURAS, nombre + '.jpg');
-        if (fs.existsSync(mini)) fs.unlinkSync(mini);
-      } catch (e) { }
+      // el archivo se conserva en datos/subidas para poder deshacer
+      anotarCambio(req, 'media', id, libro.titulo, 'Quitado: ' + nombre, antes, campos);
       return enviarJson(res, 200, { ok: true, libro: buscarLibro(id) });
     }
   }

@@ -30,6 +30,7 @@
     <nav class="cabecera-acciones">
       <button class="boton boton-fantasma" id="btnMapa">Estanterías</button>
       <button class="boton boton-fantasma solo-socios" id="btnRevision" hidden>Revisión</button>
+      <button class="boton boton-fantasma solo-socios" id="btnHistorial" hidden>Historial</button>
       <button class="boton boton-fantasma solo-socios" id="btnNuevoLibro" hidden>Añadir libro</button>
       <button class="boton boton-fantasma solo-socios" id="btnAjustes" hidden>Ajustes</button>
       <button class="boton boton-principal" id="btnAcceso">Entrar</button>
@@ -247,6 +248,22 @@
       <button class="boton boton-contorno" type="button" id="btnRevisionCsv">Descargar lista (CSV)</button>
       <button class="boton boton-contorno" type="button" id="btnRevisionCerrar">Cerrar</button>
     </div>
+  </div>
+</dialog>
+
+<!-- ------------------------------ historial de cambios ------------------------------ -->
+<dialog class="panel" id="panelHistorial">
+  <div class="panel-cabecera">
+    <p class="panel-etiqueta">Historial de cambios</p>
+    <button class="cerrar" data-cerrar aria-label="Cerrar">×</button>
+  </div>
+  <div class="panel-cuerpo">
+    <p class="nota" id="historialResumen"></p>
+    <div class="revision-filtros">
+      <label class="campo"><span>Buscar</span>
+        <input type="search" id="historialBuscar" placeholder="libro, cambio, usuario…" autocomplete="off"></label>
+    </div>
+    <div class="historial-lista" id="historialLista"></div>
   </div>
 </dialog>
 

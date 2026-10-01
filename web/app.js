@@ -18,7 +18,8 @@
     version: '',
     actualizando: false,
     novedades: { altas: [], bajas: [] },
-    diagnostico: { avisos: [], totalArchivos: 0 }
+    diagnostico: { avisos: [], totalArchivos: 0 },
+    historial: { cambios: [] }
   };
 
   /* ------------------------------------------------------------ utilidades */
@@ -302,7 +303,7 @@
     });
     const i = estado.libros.findIndex((x) => x.id === id);
     if (i >= 0 && res.libro) estado.libros[i] = Object.assign(estado.libros[i], res.libro);
-    return res.libro;
+    return res;
   }
 
   async function subirArchivo(id, tipo, archivo) {
@@ -323,6 +324,7 @@
     $('#btnNuevoLibro').hidden = !s.logueado;
     $('#btnAjustes').hidden = !s.logueado;
     $('#btnRevision').hidden = !s.logueado;
+    $('#btnHistorial').hidden = !s.logueado;
     $('#avisoClave').hidden = !s.clavePorDefecto;
     $('#ajusteUsuario').value = s.usuario || '';
   }
@@ -619,6 +621,60 @@
     pintarMapa();
   }
 
+  /* ------------------------------------------- historial de cambios */
+  const ETIQUETA_ACCION = {
+    estado: 'Estado', ficha: 'Ficha', alta: 'Alta', borrado: 'Borrado',
+    media: 'Archivos', deshacer: 'Deshacer', clave: 'Clave'
+  };
+
+  function fechaHora(iso) {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? String(iso || '')
+      : d.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function historialEntrada(e) {
+    const puede = e.accion !== 'deshacer' && e.accion !== 'clave' && !e.deshecho &&
+      (e.accion === 'alta' || e.accion === 'borrado' || !!e.antes);
+    const meta = [fechaHora(e.fecha), e.usuario, e.desde].filter(Boolean).join(' · ') +
+      (e.deshecho ? ' · deshecho' : '');
+    return '<article class="historial-fila' + (e.deshecho ? ' deshecho' : '') + '"' +
+      (e.id ? ' data-id="' + escap(e.id) + '"' : '') + '>' +
+      '<span class="insignia-accion">' + escap(ETIQUETA_ACCION[e.accion] || e.accion) + '</span>' +
+      '<div class="historial-texto">' +
+        '<p class="historial-titulo">' + escap(e.titulo || '—') + '</p>' +
+        '<p class="historial-detalle">' + escap(e.detalle || '') + '</p>' +
+        '<p class="historial-meta">' + escap(meta) + '</p>' +
+      '</div>' +
+      (puede ? '<button type="button" class="boton boton-contorno boton-pequeno" data-deshacer="' + e.n + '">Deshacer</button>' : '') +
+    '</article>';
+  }
+
+  function pintarHistorial() {
+    const h = estado.historial || { cambios: [] };
+    const total = (h.cambios || []).length;
+    const filtro = norm($('#historialBuscar').value);
+    const lista = (h.cambios || []).slice().reverse()
+      .filter((e) => !filtro || norm([e.titulo, e.detalle, e.usuario, e.desde, e.accion].join(' ')).includes(filtro));
+    $('#historialResumen').textContent = total
+      ? (filtro
+        ? lista.length.toLocaleString('es-ES') + ' coincidencias de ' + total.toLocaleString('es-ES') + ' cambios registrados.'
+        : total.toLocaleString('es-ES') + ' cambios registrados (se conservan los últimos 400). Los deshechos quedan como testigo.')
+      : 'Todavía no hay cambios registrados.';
+    $('#historialLista').innerHTML = lista.length
+      ? lista.slice(0, 200).map(historialEntrada).join('')
+      : '<p class="revision-vacio">' + (total
+        ? 'Ningún cambio coincide con el filtro.'
+        : 'Aquí aparecerán los cambios de estado y de ficha, quién los hizo y cuándo.') + '</p>';
+  }
+
+  async function abrirHistorial() {
+    const panel = $('#panelHistorial');
+    if (!panel.open) panel.showModal();
+    try { estado.historial = await api('/api/historial'); } catch (e) { estado.historial = { cambios: [] }; }
+    pintarHistorial();
+  }
+
   /* ------------------------------------------------------------ arranque */
   async function cargarSesion() {
     try { estado.sesion = await api('/api/estado'); } catch (e) { /* sin conexion */ }
@@ -639,6 +695,10 @@
       pintarRevision();
     }
     if ($('#panelMapa').open) pintarMapa();
+    if ($('#panelHistorial').open) {
+      try { estado.historial = await api('/api/historial'); } catch (e) { /* nada */ }
+      pintarHistorial();
+    }
   }
 
   /* -------------------------------------------------- aviso de catalogo */
@@ -767,7 +827,7 @@
         return;
       }
       if (e.target.closest('#btnBorrarLibro')) {
-        if (!confirm('¿Eliminar «' + l.titulo + '» del catálogo? Esta acción no se puede deshacer.')) return;
+        if (!confirm('¿Eliminar «' + l.titulo + '» del catálogo? Podrás deshacerlo desde el Historial.')) return;
         try {
           await api('/api/libros/' + encodeURIComponent(l.id), { method: 'DELETE' });
           estado.libros = estado.libros.filter((x) => x.id !== l.id);
@@ -788,11 +848,11 @@
       const campos = {};
       datos.forEach((v, k) => { campos[k] = String(v); });
       try {
-        await guardarLibro(l.id, campos);
+        const res = await guardarLibro(l.id, campos);
         $('#editorFicha').hidden = true; $('#editorFicha').innerHTML = '';
         $('#btnEditarFicha').hidden = false;
         pintarDetalle(); pintar(false); pintarPortadaDatos();
-        toast('Ficha guardada');
+        toast(res.docx ? 'Ficha guardada · documento .docx actualizado' : 'Ficha guardada');
       } catch (err) {
         const err1 = $('#editarError'); err1.textContent = err.message; err1.hidden = false;
       }
@@ -841,6 +901,30 @@
         if (estado.detalleId) pintarDetalle();
         toast('Bienvenido/a, ' + (estado.sesion.usuario || ''));
       } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    });
+
+    // historial de cambios
+    $('#btnHistorial').addEventListener('click', abrirHistorial);
+    $('#historialBuscar').addEventListener('input', pintarHistorial);
+    $('#historialLista').addEventListener('click', async (e) => {
+      const boton = e.target.closest('[data-deshacer]');
+      if (boton) {
+        e.stopPropagation();
+        if (!confirm('¿Deshacer este cambio?')) return;
+        boton.disabled = true;
+        try {
+          await api('/api/historial/deshacer', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ n: Number(boton.dataset.deshacer) })
+          });
+          toast('Cambio deshecho');
+          await abrirHistorial();
+          await cargarLibros();
+        } catch (err) { toast(err.message, true); boton.disabled = false; }
+        return;
+      }
+      const fila = e.target.closest('[data-id]');
+      if (fila) abrirDetalle(fila.dataset.id);
     });
 
     // mapa de estanterias
