@@ -110,7 +110,8 @@ function LeerDocx([string]$ruta, [string]$nombreArchivo) {
   }
   $actual = ''
   foreach ($linea in $lineas) {
-    $m = [regex]::Match($linea, '^\s*([\p{Lu}][\p{Lu}\s]{2,20})\s*:\s*(.*)$')
+    # la etiqueta puede ir en mayusculas o minusculas (TITULO:, Titulo:, titulo:)
+    $m = [regex]::Match($linea, '^\s*([\p{L}][\p{L}\s]{2,20})\s*:\s*(.*)$')
     if ($m.Success) {
       $etiqueta = Normalizar $m.Groups[1].Value
       $valor = $m.Groups[2].Value.Trim()

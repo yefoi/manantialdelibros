@@ -209,7 +209,9 @@ de información del libro:
 - los `.pdf` y `.txt` originales no se tocan.
 
 El documento conserva el formato que lee el importador (`TITULO:`, `AUTOR:`, `PAGINAS:`,
-`EDITORIAL:`, `GENERO:`, `FECHA DE PUBLICACION:`, `SINOPSIS:`). Se puede desactivar con
+`EDITORIAL:`, `SINOPSIS:`; `GENERO:` y `FECHA DE PUBLICACION:` solo si el documento los trae).
+Las etiquetas valen en mayúsculas o minúsculas y en cualquier orden. La categoría del libro es
+siempre la del Excel (`SIGNATURA`), no la del documento. Se puede desactivar con
 `"sincronizarDocx": false` en `datos\ajustes.json`.
 
 La sincronización es **bidireccional**: si después editas ese `.docx` a mano (Word, LibreOffice…),

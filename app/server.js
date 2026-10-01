@@ -414,7 +414,8 @@ function textoDeDocumentoXml(xml) {
   };
   let actual = '';
   for (const linea of lineas) {
-    const mm = linea.match(/^([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ\s]{2,20})\s*:\s*(.*)$/);
+    // la etiqueta puede ir en mayusculas o minusculas (TITULO:, Titulo:, titulo:)
+    const mm = linea.match(/^([\p{L}][\p{L}\s]{2,20})\s*:\s*(.*)$/u);
     if (mm) {
       const etiqueta = normalizar(mm[1]);
       if (alias[etiqueta]) {
