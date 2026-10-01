@@ -163,6 +163,15 @@ Windows (`/api/abrir`). Al guardar, `app\server.js` reescribe `ajustes.json` y l
 reimportación. Mientras una ruta no sea válida, el sitio sigue sirviendo el último catálogo bueno.
 
 
+## Estado del sistema
+
+Dentro de *Ajustes* (socios) hay un bloque plegable **Estado del sistema** con semáforos: servidor
+en marcha y direcciones de la wifi, catálogo y resultado de la última importación, vigilancia
+automática, rutas del Excel y de las fotos, cambios pendientes de pasar al Excel, avisos del
+diagnóstico, espacio libre y tamaño de `datos\`, ficheros clave presentes y los últimos errores
+del registro. Incluye botones para *Actualizar estado* y *Copia de seguridad* (crea un ZIP en
+`copias\`).
+
 ## El Excel en las dos direcciones
 
 Los cambios hechos en la web se escriben también en el Excel

@@ -336,6 +336,7 @@
   function abrirAjustes() {
     $('#panelAjustes').showModal();
     cargarRutas();
+    cargarSalud();
     $('#ajusteActual').focus();
   }
 
@@ -700,6 +701,102 @@
     pintarHistorial();
   }
 
+  /* ------------------------------------------- estado del sistema (salud) */
+  function tamano(bytes) {
+    const b = Number(bytes) || 0;
+    if (b >= 1024 * 1024 * 1024) return (b / (1024 * 1024 * 1024)).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' GB';
+    if (b >= 1024 * 1024) return (b / (1024 * 1024)).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' MB';
+    if (b >= 1024) return Math.round(b / 1024).toLocaleString('es-ES') + ' KB';
+    return b.toLocaleString('es-ES') + ' B';
+  }
+
+  function hace(iso) {
+    const ms = Date.now() - new Date(iso).getTime();
+    if (!isFinite(ms) || ms < 0) return '';
+    const min = Math.round(ms / 60000);
+    if (min < 1) return 'hace unos segundos';
+    if (min < 60) return 'hace ' + min + ' min';
+    const h = Math.floor(min / 60);
+    if (h < 48) return 'hace ' + h + ' h' + (min % 60 ? ' y ' + (min % 60) + ' min' : '');
+    return 'hace ' + Math.round(h / 24) + ' días';
+  }
+
+  function saludFila(nivel, titulo, detalle) {
+    return '<div class="salud-fila">' +
+      '<span class="salud-punto salud-' + nivel + '"></span>' +
+      '<div class="salud-texto"><b>' + escap(titulo) + '</b>' +
+      (detalle ? '<small>' + escap(detalle) + '</small>' : '') + '</div></div>';
+  }
+
+  function pintarSalud(s) {
+    const filas = [];
+    let problemas = 0;
+    const nivel = (bien, siMal) => {
+      if (!bien) problemas++;
+      return bien ? 'ok' : (siMal || 'mal');
+    };
+
+    const dirs = s.direcciones || [];
+    filas.push(saludFila('ok', 'Servidor en marcha',
+      'Puerto ' + s.servidor.puerto + ' · Node ' + s.servidor.node +
+      ' · desde ' + fechaHora(s.servidor.desde) + ' (' + hace(s.servidor.desde) + ')' +
+      (dirs.length ? ' · En la wifi: ' + dirs[0] : '')));
+
+    const imp = (s.catalogo && s.catalogo.importacion) || {};
+    let detCat = s.catalogo.total.toLocaleString('es-ES') + ' libros';
+    let nivelCat = 'ok';
+    if (s.catalogo.importando) { nivelCat = 'aviso'; detCat += ' · actualizando ahora…'; }
+    else if (imp.ok === false) { nivelCat = 'mal'; problemas++; detCat += ' · la última actualización falló: ' + (imp.error || 'error'); }
+    else if (s.catalogo.version) { detCat += ' · última actualización ' + fechaHora(s.catalogo.version); }
+    filas.push(saludFila(nivelCat, 'Catálogo', detCat));
+
+    filas.push(saludFila(nivel(s.vigilancia.activa, 'aviso'), 'Vigilancia automática',
+      s.vigilancia.activa
+        ? (s.vigilancia.ultimoCambio ? 'Último cambio detectado ' + hace(s.vigilancia.ultimoCambio) : 'Sin cambios desde que arrancó')
+        : 'Desactivada: hay que actualizar a mano'));
+
+    filas.push(saludFila(nivel(s.rutas.existeExcel && s.rutas.existeLibros), 'Rutas de los datos',
+      (s.rutas.existeExcel ? '✓ Excel' : '✗ No encuentro el Excel') + ' · ' +
+      (s.rutas.existeLibros ? '✓ Carpeta de fotos' : '✗ No encuentro la carpeta de fotos')));
+
+    filas.push(saludFila(nivel(s.excelPendiente === 0, 'aviso'), 'Excel al día',
+      s.excelPendiente === 0 ? 'No hay cambios pendientes' : s.excelPendiente + ' cambio(s) en cola para el Excel'));
+
+    if (s.diagnostico) {
+      filas.push(saludFila(nivel(s.diagnostico.totalAvisos === 0, 'aviso'), 'Diagnóstico de archivos',
+        s.diagnostico.totalAvisos === 0
+          ? 'Sin avisos (' + (s.diagnostico.totalArchivos || 0) + ' archivos revisados)'
+          : s.diagnostico.totalAvisos + ' aviso(s) · míralos en Revisión'));
+    }
+
+    const clave = s.clave || {};
+    const faltan = Object.keys(clave).filter((k) => !clave[k]);
+    const t = s.tamanos || {};
+    const detDatos = (s.espacio ? 'Libre ' + tamano(s.espacio.libre) + ' de ' + tamano(s.espacio.total) + ' · ' : '') +
+      'datos ' + tamano((t.datos || {}).bytes) +
+      ' (subidas ' + tamano((t.subidas || {}).bytes) + ', miniaturas ' + tamano((t.miniaturas || {}).bytes) +
+      ', copias ' + tamano((t.copias || {}).bytes) + ')';
+    filas.push(saludFila(nivel(faltan.length === 0), 'Datos y disco',
+      faltan.length ? 'Faltan ficheros: ' + faltan.join(', ') : detDatos));
+
+    if ((s.errores || []).length) {
+      filas.push(saludFila('aviso', 'Últimos avisos del registro', ''));
+      filas.push('<pre class="salud-errores">' + escap(s.errores.join('\n')) + '</pre>');
+    } else {
+      filas.push(saludFila('ok', 'Registro', 'Sin errores ni avisos recientes'));
+    }
+
+    $('#saludLista').innerHTML = filas.join('');
+    const resumen = $('#saludResumen');
+    resumen.textContent = problemas ? problemas + ' cosa(s) a revisar' : 'todo correcto';
+    resumen.className = 'nota ' + (problemas ? 'salud-resumen-mal' : 'salud-resumen-ok');
+  }
+
+  async function cargarSalud() {
+    try { pintarSalud(await api('/api/salud')); }
+    catch (e) { $('#saludLista').innerHTML = '<p class="nota">No se ha podido consultar el estado: ' + escap(e.message) + '</p>'; }
+  }
+
   /* ------------------------------------------------------------ arranque */
   async function cargarSesion() {
     try { estado.sesion = await api('/api/estado'); } catch (e) { /* sin conexion */ }
@@ -985,6 +1082,17 @@
     $('#btnRevisionCerrar').addEventListener('click', () => $('#panelRevision').close());
 
     // ajustes
+    $('#btnSaludRefrescar').addEventListener('click', cargarSalud);
+    $('#btnCopiaSeguridad').addEventListener('click', async () => {
+      const boton = $('#btnCopiaSeguridad');
+      boton.disabled = true;
+      try {
+        const r = await api('/api/copia-seguridad', { method: 'POST' });
+        toast(r.mensaje || (r.ok ? 'Copia creada' : 'No se ha podido crear la copia'), !r.ok);
+        cargarSalud();
+      } catch (e) { toast(e.message, true); }
+      boton.disabled = false;
+    });
     $('#btnExaminarExcel').addEventListener('click', () => abrirExplorador('archivo'));
     $('#btnExaminarLibros').addEventListener('click', () => abrirExplorador('carpeta'));
     $('#btnAbrirExcel').addEventListener('click', () => abrirEnWindows($('#rutaExcel').value));

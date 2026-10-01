@@ -540,6 +540,29 @@ body.socio .solo-socios-detalle { display: block; }
   font-size: .72rem; font-weight: 600; white-space: nowrap; flex: none;
 }
 
+/* ---------------------------------------------------------------- estado del sistema */
+.salud summary {
+  cursor: pointer; user-select: none; list-style: none;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.salud summary::-webkit-details-marker { display: none; }
+.salud summary h3 { margin: 0; }
+.salud-resumen-ok { color: #2F7D5B; }
+.salud-resumen-mal { color: #A4443E; }
+.salud-fila { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--borde); align-items: flex-start; }
+.salud-fila:last-child { border-bottom: 0; }
+.salud-punto { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex: none; }
+.salud-ok { background: var(--disponible); }
+.salud-mal { background: var(--donado); }
+.salud-aviso { background: var(--prestado); }
+.salud-texto { min-width: 0; }
+.salud-texto b { display: block; font-family: var(--titulo); font-size: .86rem; }
+.salud-texto small { display: block; color: var(--tinta-suave); font-size: .78rem; word-break: break-word; }
+.salud-errores {
+  margin: 6px 0 10px; padding: 8px 10px; background: var(--papel-2); border-radius: 8px;
+  font-size: .72rem; white-space: pre-wrap; color: var(--tinta-suave); max-height: 140px; overflow: auto;
+}
+
 /* ---------------------------------------------------------------- avisos */
 .aviso-catalogo {
   position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 91;

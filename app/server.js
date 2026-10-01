@@ -28,6 +28,10 @@ const LOG_PATH = path.join(DATOS, 'registro.log');
 const MAX_SUBIDA = 30 * 1024 * 1024;   // 30 MB
 const DURACION_SESION = 30 * 24 * 60 * 60 * 1000; // 30 dias
 
+const ARRANQUE = Date.now();
+let ultimoCambioDetectado = '';
+let ultimaImportacion = { inicio: '', fin: '', ok: null, motivo: '', error: '', total: 0 };
+
 // ------------------------------------------------------------ utilidades basicas
 function leerJson(ruta, porDefecto) {
   try {
@@ -58,6 +62,30 @@ function normalizar(s) {
 function carpetaSegura(nombre) {
   return typeof nombre === 'string' && nombre.length > 0 && nombre.length < 200 &&
     !nombre.includes('/') && !nombre.includes('\\') && !nombre.includes('..') && !nombre.startsWith('.');
+}
+function tamanoCarpeta(dir, profundidad) {
+  // suma el tamano de una carpeta sin pasarse (para el estado del sistema)
+  let bytes = 0, archivos = 0;
+  (function andar(d, nivel) {
+    let entradas = [];
+    try { entradas = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; }
+    for (const e of entradas) {
+      if (archivos > 20000) return;
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { if (nivel > 0) andar(p, nivel - 1); }
+      else {
+        try { bytes += fs.statSync(p).size; archivos++; } catch (err) { }
+      }
+    }
+  })(dir, profundidad);
+  return { bytes, archivos };
+}
+function ultimasLineasLog(cuantas) {
+  try {
+    const lineas = fs.readFileSync(LOG_PATH, 'utf8').split(/\r?\n/)
+      .filter((l) => /error|aviso|no se ha podido|no se pudo|fallo/i.test(l));
+    return lineas.slice(-cuantas);
+  } catch (e) { return []; }
 }
 
 // ------------------------------------------------------------ ajustes
@@ -711,6 +739,65 @@ async function api(req, res, url) {
     return enviarJson(res, 200, diag);
   }
 
+  // ---- estado del sistema (salud) para el personal
+  if (ruta === '/api/salud' && metodo === 'GET') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    const cat = cargarCatalogo();
+    const cola = leerColaExcel();
+    const diag = leerJson(path.join(DATOS, 'diagnostico.json'), null);
+    let espacio = null;
+    try {
+      const s = fs.statfsSync(DATOS);
+      espacio = { libre: Number(s.bavail) * Number(s.bsize), total: Number(s.blocks) * Number(s.bsize) };
+    } catch (e) { }
+    return enviarJson(res, 200, {
+      servidor: {
+        desde: new Date(ARRANQUE).toISOString(), puerto: ajustes.puerto,
+        node: process.version, plataforma: process.platform
+      },
+      direcciones: direcciones(),
+      catalogo: { total: cat.total, version: cat.version, importando, importacion: ultimaImportacion },
+      vigilancia: { activa: ajustes.vigilar !== false, ultimoCambio: ultimoCambioDetectado },
+      rutas: {
+        origenExcel: ajustes.origenExcel || '', origenLibros: ORIGEN || '',
+        existeExcel: !!(ajustes.origenExcel && fs.existsSync(ajustes.origenExcel)),
+        existeLibros: !!(ORIGEN && fs.existsSync(ORIGEN))
+      },
+      excelPendiente: (cola.items || []).length,
+      diagnostico: diag ? {
+        generado: diag.generado || '', totalAvisos: diag.totalAvisos || 0, totalArchivos: diag.totalArchivos || 0
+      } : null,
+      espacio,
+      tamanos: {
+        datos: tamanoCarpeta(DATOS, 3),
+        subidas: tamanoCarpeta(SUBIDAS, 2),
+        miniaturas: tamanoCarpeta(MINIATURAS, 2),
+        copias: tamanoCarpeta(path.join(RAIZ, 'copias'), 2)
+      },
+      clave: {
+        biblioteca: fs.existsSync(BIBLIOTECA_PATH), cambios: fs.existsSync(CAMBIOS_PATH),
+        nuevos: fs.existsSync(NUEVOS_PATH), historial: fs.existsSync(HISTORIAL_PATH),
+        ajustes: fs.existsSync(AJUSTES_PATH), acceso: fs.existsSync(ACCESO_PATH)
+      },
+      errores: ultimasLineasLog(6)
+    });
+  }
+
+  // ---- copia de seguridad de los datos
+  if (ruta === '/api/copia-seguridad' && metodo === 'POST') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    ejecutarPowerShell('copia-seguridad.ps1', [], (err, stdout) => {
+      if (err) {
+        registrar('No se ha podido crear la copia de seguridad: ' + String(err.message || err).split('\n')[0]);
+        return enviarJson(res, 200, { ok: false, mensaje: 'No se ha podido crear la copia de seguridad' });
+      }
+      const texto = String(stdout || '').trim().split('\n').filter(Boolean).pop() || 'Copia creada';
+      registrar('Copia de seguridad creada (' + texto + ')');
+      return enviarJson(res, 200, { ok: true, mensaje: texto });
+    });
+    return;
+  }
+
   // ---- historial de cambios (quien cambio que y cuando) y deshacer
   if (ruta === '/api/historial' && metodo === 'GET') {
     if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
@@ -1136,10 +1223,14 @@ function actualizarCatalogo(motivo, cb) {
   importando = true;
   importacionPendiente = false;
   const t0 = Date.now();
+  ultimaImportacion = { inicio: new Date().toISOString(), fin: '', ok: null, motivo, error: '', total: ultimaImportacion.total || 0 };
   registrar('*** Cambios detectados (' + motivo + '): reimportando el catalogo... ***');
   ejecutarPowerShell('importar.ps1', [], (errI) => {
     if (errI) {
-      registrar('ERROR al reimportar: ' + String(errI.message || errI).split('\n')[0]);
+      ultimaImportacion.fin = new Date().toISOString();
+      ultimaImportacion.ok = false;
+      ultimaImportacion.error = String(errI.message || errI).split('\n')[0];
+      registrar('ERROR al reimportar: ' + ultimaImportacion.error);
       importando = false;
       if (cb) cb(errI);
       return;
@@ -1151,6 +1242,10 @@ function actualizarCatalogo(motivo, cb) {
       const cat = cargarCatalogo();
       firmaConocidaTexto = firmaActual().texto;
       importando = false;
+      ultimaImportacion.fin = new Date().toISOString();
+      ultimaImportacion.ok = true;
+      ultimaImportacion.error = errM ? 'Aviso: fallo al generar miniaturas' : '';
+      ultimaImportacion.total = cat.total;
       registrar('*** Catalogo actualizado: ' + cat.total + ' libros (' + cat.version + ') ***');
       if (importacionPendiente) { importacionPendiente = false; actualizarCatalogo('cambios encadenados'); }
       if (cb) cb(null);
@@ -1181,6 +1276,7 @@ function vigilarCambios() {
     firma = firmaActual();
     if (firma.texto === firmaConocidaTexto) return;
     firmaConocidaTexto = firma.texto;
+    ultimoCambioDetectado = new Date().toISOString();
     clearTimeout(temporizadorCambios);
     // se espera a que termine de copiarse antes de reimportar
     temporizadorCambios = setTimeout(() => actualizarCatalogo('Excel o fotos modificados'), 7000);
