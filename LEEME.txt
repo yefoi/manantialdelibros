@@ -133,6 +133,11 @@ subidas, contraseña): solo el programa, el diseño y las herramientas.
 Para subir cambios que se hayan hecho en el programa:
       doble clic en "Subir cambios a GitHub.bat"
 
+Para bajar los cambios que se hayan hecho en otro ordenador:
+      doble clic en "Actualizar desde GitHub.bat"
+      (no toca los datos del catalogo, historial, fotos subidas...
+      y reinicia el servidor solo)
+
 
 Cambiar de sitio el Excel o la carpeta de fotos
 -----------------------------------------------
