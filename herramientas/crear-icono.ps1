@@ -25,7 +25,10 @@ Write-Host "Logo original: $Origen"
 $fuente = [System.Drawing.Image]::FromFile($Origen)
 
 # --- recortar al contenido (quita margenes transparentes) ---
+# se copia a memoria y se suelta el archivo original: el destino puede ser el
+# mismo archivo que el origen (por ejemplo web\img\logo-libros.png)
 $bmp32 = New-Object System.Drawing.Bitmap($fuente)
+$fuente.Dispose()
 $minX = $bmp32.Width; $minY = $bmp32.Height; $maxX = -1; $maxY = -1
 for ($y = 0; $y -lt $bmp32.Height; $y++) {
   for ($x = 0; $x -lt $bmp32.Width; $x++) {
@@ -99,7 +102,7 @@ try {
 } finally { $bw.Close(); $fs.Close() }
 Remove-Item $tmp -Recurse -Force
 Write-Host "  creado: $((Join-Path $Raiz 'web\icono.ico')) ($([Math]::Round((Get-Item (Join-Path $Raiz 'web\icono.ico')).Length/1KB)) KB)"
-$fuente.Dispose()
+$bmp32.Dispose()
 
 # --- acceso directo del escritorio con el icono nuevo ---
 $escritorio = [Environment]::GetFolderPath('Desktop')

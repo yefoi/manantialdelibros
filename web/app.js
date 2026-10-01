@@ -331,6 +331,12 @@
   let explorarTipo = 'carpeta';
   let explorarDestino = '';
 
+  function abrirAjustes() {
+    $('#panelAjustes').showModal();
+    cargarRutas();
+    $('#ajusteActual').focus();
+  }
+
   async function cargarRutas() {
     try {
       const r = await api('/api/rutas');
@@ -811,13 +817,11 @@
     });
 
     // acceso
+    $('#btnAjustes').addEventListener('click', () => {
+      if (estado.sesion.logueado) abrirAjustes();
+    });
     $('#btnAcceso').addEventListener('click', () => {
-      if (estado.sesion.logueado) {
-        $('#panelAjustes').showModal();
-        cargarRutas();
-        $('#ajusteActual').focus();
-        return;
-      }
+      if (estado.sesion.logueado) { abrirAjustes(); return; }
       $('#panelAcceso').showModal();
       $('#accesoUsuario').value = 'koine';
       $('#accesoClave').value = '';
