@@ -384,29 +384,58 @@ if ($asociaciones.Count) {
   foreach ($k in $grupos.Keys) {
     foreach ($letra in $grupos[$k].Keys) {
       $g = $grupos[$k][$letra]
-      foreach ($n in @($g.img1)) {
-        if ($usados.ContainsKey($n)) { continue }
+      # dueño del grupo: el libro al que apuntan sus archivos asociados
+      $duenos = @{}
+      foreach ($n in (@($g.img1) + @($g.img2) + @($g.docs))) {
         $idAsoc = [string]$asociaciones[$n]
-        if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
-        $l = $porIdAsoc[$idAsoc]
-        if (@($l.portadas).Count -eq 0) { $conPortada++ }
-        $l.portadas = @(@($l.portadas) + $n)
-        $usados[$n] = $true
+        if ($idAsoc -and $porIdAsoc.ContainsKey($idAsoc)) { $duenos[$idAsoc] = $true }
       }
-      foreach ($n in @($g.img2)) {
-        if ($usados.ContainsKey($n)) { continue }
-        $idAsoc = [string]$asociaciones[$n]
-        if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
-        $l = $porIdAsoc[$idAsoc]
-        $l.contraportadas = @(@($l.contraportadas) + $n)
-        $usados[$n] = $true
-      }
-      foreach ($n in @($g.docs)) {
-        if ($usados.ContainsKey($n)) { continue }
-        $idAsoc = [string]$asociaciones[$n]
-        if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
-        $l = $porIdAsoc[$idAsoc]
-        if (-not $l.infoArchivo) { $l.infoArchivo = $n; $usados[$n] = $true }
+      if (@($duenos.Keys).Count -eq 1) {
+        # todo el grupo (portada, contraportada y documento) va a su libro,
+        # aunque algun archivo (p. ej. un .docx recien creado) no tenga aun asociacion
+        $l = $porIdAsoc[(@($duenos.Keys))[0]]
+        foreach ($n in @($g.img1)) {
+          if ($usados.ContainsKey($n)) { continue }
+          if (@($l.portadas).Count -eq 0) { $conPortada++ }
+          $l.portadas = @(@($l.portadas) + $n)
+          $usados[$n] = $true
+        }
+        foreach ($n in @($g.img2)) {
+          if ($usados.ContainsKey($n)) { continue }
+          $l.contraportadas = @(@($l.contraportadas) + $n)
+          $usados[$n] = $true
+        }
+        foreach ($n in @($g.docs)) {
+          if ($usados.ContainsKey($n)) { continue }
+          if (-not $l.infoArchivo) { $l.infoArchivo = $n }
+          $usados[$n] = $true
+        }
+      } else {
+        # archivos del mismo grupo asociados a libros distintos: cada uno al suyo
+        foreach ($n in @($g.img1)) {
+          if ($usados.ContainsKey($n)) { continue }
+          $idAsoc = [string]$asociaciones[$n]
+          if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
+          $l = $porIdAsoc[$idAsoc]
+          if (@($l.portadas).Count -eq 0) { $conPortada++ }
+          $l.portadas = @(@($l.portadas) + $n)
+          $usados[$n] = $true
+        }
+        foreach ($n in @($g.img2)) {
+          if ($usados.ContainsKey($n)) { continue }
+          $idAsoc = [string]$asociaciones[$n]
+          if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
+          $l = $porIdAsoc[$idAsoc]
+          $l.contraportadas = @(@($l.contraportadas) + $n)
+          $usados[$n] = $true
+        }
+        foreach ($n in @($g.docs)) {
+          if ($usados.ContainsKey($n)) { continue }
+          $idAsoc = [string]$asociaciones[$n]
+          if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
+          $l = $porIdAsoc[$idAsoc]
+          if (-not $l.infoArchivo) { $l.infoArchivo = $n; $usados[$n] = $true }
+        }
       }
     }
   }
