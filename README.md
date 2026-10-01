@@ -164,17 +164,19 @@ reimportación. Mientras una ruta no sea válida, el sitio sigue sirviendo el ú
 
 ## El Excel en las dos direcciones
 
-Los cambios de estado hechos en la web se escriben también en el Excel
-(`herramientas\actualizar-excel.ps1`):
+Los cambios hechos en la web se escriben también en el Excel
+(`herramientas\actualizar-excel.ps1`), en las columnas `A` artículo, `B` título, `C` autor,
+`D` editorial, `E` signatura, `F` estantería, `G` balda, `H` estado, `J` F.SALIDA y
+`K` observaciones:
 
-- **Web → Excel**: al cambiar un estado, el servidor apunta el cambio en `datos\excel-pendiente.json`
-  y actualiza la columna `ESTADO` (y `F.SALIDA`) de esa fila. Antes de escribir guarda una copia en
-  `datos\copias-excel\` (las 30 últimas) y no toca nada más del libro. Si el Excel está abierto
-  (bloqueado), el cambio se guarda igualmente en la web y se reintenta cada minuto; `POST /api/excel/volcar`
-  fuerza un intento y `GET /api/estado` informa de los pendientes.
-- **Excel → web**: al reimportar, `importar.ps1` compara el estado del Excel con el último que
-  escribió la web (campo `_excelEstado` de `cambios.json`). Si no coinciden es que alguien lo cambió
-  a mano: manda el Excel y el cambio de la web se retira («gana el último cambio»).
+- **Web → Excel**: al guardar un estado o una ficha, el servidor apunta el cambio en
+  `datos\excel-pendiente.json` y actualiza esas celdas de la fila. Antes de escribir guarda una copia
+  en `datos\copias-excel\` (las 30 últimas). Si el Excel está abierto (bloqueado), el cambio se
+  guarda igualmente en la web y se reintenta cada minuto; `POST /api/excel/volcar` fuerza un intento
+  y `GET /api/estado` informa de los pendientes.
+- **Excel → web**: al reimportar, `importar.ps1` compara el Excel con lo último que escribió la web
+  (`_excelEstado` y `_excelCampos` de `cambios.json`). Si ya no coincide es que alguien lo cambió a
+  mano: manda el Excel y el cambio de la web se retira («gana el último cambio»).
 
 ## La web actualiza el documento del libro (.docx)
 
@@ -189,6 +191,10 @@ de información del libro:
 El documento conserva el formato que lee el importador (`TITULO:`, `AUTOR:`, `PAGINAS:`,
 `EDITORIAL:`, `GENERO:`, `FECHA DE PUBLICACION:`, `SINOPSIS:`). Se puede desactivar con
 `"sincronizarDocx": false` en `datos\ajustes.json`.
+
+La sincronización es **bidireccional**: si después editas ese `.docx` a mano (Word, LibreOffice…),
+al reimportar `importar.ps1` lo detecta comparándolo con lo último que escribió la web
+(`_docxCampos` de `cambios.json`) y adopta el texto del documento («gana el último cambio»).
 
 Ojo: si el `.docx` está abierto en Word/LibreOffice, puede estar bloqueado; en ese caso la
 ficha se guarda igual y el documento se actualizará en el siguiente guardado.

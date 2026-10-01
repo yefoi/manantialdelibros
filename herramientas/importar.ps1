@@ -697,30 +697,80 @@ $novTmp = Join-Path $Raiz 'datos\novedades.json.tmp'
 [IO.File]::WriteAllText($novTmp, ($novedades | ConvertTo-Json -Depth 4 -Compress), (New-Object Text.UTF8Encoding $false))
 Move-Item -Force $novTmp (Join-Path $Raiz 'datos\novedades.json')
 
-# --------------------------------- reconciliar estados: "gana el ultimo cambio"
-# Si el estado del Excel no coincide con el que la web le habia pasado, es que
-# alguien lo ha cambiado a mano en el Excel: manda el Excel.
+# --------------------------- reconciliar cambios: "gana el ultimo cambio"
+# La web anota lo que escribe en los documentos (_excelEstado, _excelCampos,
+# _docxCampos). Si el Excel o el .docx ya no coincide con eso, es que alguien
+# los ha cambiado a mano: mandan los documentos y se retira el cambio de la web.
 $cambiosPath = Join-Path $Raiz 'datos\cambios.json'
 if (Test-Path $cambiosPath) {
   try {
     $cambios = Get-Content $cambiosPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $porId = @{}
     foreach ($l in $libros) { $porId[$l.id] = $l }
+    $camposExcel = @('titulo', 'autor', 'editorial', 'signatura', 'estanteria', 'balda', 'observaciones')
+    $mapaDocx = @{
+      titulo = 'Titulo'; autor = 'Autor'; editorial = 'Editorial'; paginas = 'Paginas'
+      sinopsis = 'Sinopsis'; genero = 'Genero'; fechaPublicacion = 'FechaPublicacion'
+    }
     $tocado = $false
     $adoptados = 0
     foreach ($id in @($cambios.PSObject.Properties.Name)) {
       $c = $cambios.$id
       $props = @($c.PSObject.Properties.Name)
-      if ($props -notcontains 'estado') { continue }
-      if ($props -notcontains '_excelEstado') { continue }   # cambio antiguo: se pasara al Excel desde la web
       $l = $porId[$id]
-      if (-not $l) { continue }
-      if ([string]$l.estado -ne [string]$c._excelEstado) {
-        $c.PSObject.Properties.Remove('estado')
-        $c.PSObject.Properties.Remove('fechaSalida')
-        $c.PSObject.Properties.Remove('_excelEstado')
+      $cambio = $false
+
+      # estado (columna H del Excel)
+      if ($l -and $props -contains 'estado' -and $props -contains '_excelEstado') {
+        if ([string]$l.estado -ne [string]$c._excelEstado) {
+          $c.PSObject.Properties.Remove('estado')
+          $c.PSObject.Properties.Remove('fechaSalida')
+          $c.PSObject.Properties.Remove('_excelEstado')
+          $cambio = $true
+          $adoptados++
+        }
+      }
+
+      # campos de ficha que la web escribe en el Excel (columnas A..K)
+      if ($l -and $props -contains '_excelCampos') {
+        foreach ($campo in @($c._excelCampos.PSObject.Properties.Name)) {
+          if ([string]$l.$campo -ne [string]$c._excelCampos.$campo) {
+            if ($props -contains $campo) { $c.PSObject.Properties.Remove($campo) }
+            $c._excelCampos.PSObject.Properties.Remove($campo)
+            $cambio = $true
+            $adoptados++
+          }
+        }
+        if (@($c._excelCampos.PSObject.Properties.Name).Count -eq 0) { $c.PSObject.Properties.Remove('_excelCampos') }
+      }
+
+      # campos de ficha que la web escribe en el .docx
+      if ($props -contains '_docxCampos') {
+        $archivo = ''
+        if ($props -contains '_docxArchivo') { $archivo = [string]$c._docxArchivo }
+        if (-not $archivo -and $l) { $archivo = [string]$l.infoArchivo }
+        $info = $null
+        if ($archivo -and $cache.ContainsKey($archivo)) { $info = $cache[$archivo] }
+        if ($info) {
+          foreach ($campo in @($c._docxCampos.PSObject.Properties.Name)) {
+            $valor = ''
+            if ($mapaDocx.ContainsKey($campo)) { $valor = [string]$info.PSObject.Properties[$mapaDocx[$campo]].Value }
+            if ($valor -ne [string]$c._docxCampos.$campo) {
+              if ($props -contains $campo) { $c.PSObject.Properties.Remove($campo) }
+              $c._docxCampos.PSObject.Properties.Remove($campo)
+              $cambio = $true
+              $adoptados++
+            }
+          }
+          if (@($c._docxCampos.PSObject.Properties.Name).Count -eq 0) {
+            $c.PSObject.Properties.Remove('_docxCampos')
+            if ($props -contains '_docxArchivo') { $c.PSObject.Properties.Remove('_docxArchivo') }
+          }
+        }
+      }
+
+      if ($cambio) {
         $tocado = $true
-        $adoptados++
         if (($c.PSObject.Properties | Measure-Object).Count -eq 0) { $cambios.PSObject.Properties.Remove($id) }
       }
     }
@@ -728,10 +778,10 @@ if (Test-Path $cambiosPath) {
       $tmp = "$cambiosPath.tmp"
       [IO.File]::WriteAllText($tmp, ($cambios | ConvertTo-Json -Depth 4 -Compress), (New-Object Text.UTF8Encoding $false))
       Move-Item -Force $tmp $cambiosPath
-      Escribir ("  estados adoptados del Excel (cambiados a mano): {0}" -f $adoptados)
+      Escribir ("  cambios adoptados de los documentos (cambiados a mano): {0}" -f $adoptados)
     }
   } catch {
-    Escribir ("  (aviso: no se han podido conciliar los estados: {0})" -f $_.Exception.Message)
+    Escribir ("  (aviso: no se han podido conciliar los cambios: {0})" -f $_.Exception.Message)
   }
 }
 

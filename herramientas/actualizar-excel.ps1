@@ -1,6 +1,7 @@
 ﻿# =====================================================================
-#  Manantial de Libros - pasar al Excel los cambios de estado hechos
-#  en la web (columna H = ESTADO, columna J = F.SALIDA)
+#  Manantial de Libros - pasar al Excel los cambios hechos en la web
+#  (A articulo, B titulo, C autor, D editorial, E signatura, F estanteria,
+#   G balda, H estado, J F.SALIDA, K observaciones)
 #
 #    .\actualizar-excel.ps1                      (usa datos\excel-pendiente.json)
 #    .\actualizar-excel.ps1 -Excel <copia.xlsx>  (para probar sin tocar el original)
@@ -102,12 +103,32 @@ try {
     if (-not $m.Success) { Write-Host "  (aviso: no encuentro la fila $filaNum)"; continue }
     $etiqueta = $m.Groups[1].Value
     $fila = $m.Groups[2].Value
-    $nueva = PonerCelda $fila $filaNum 'H' ([string]$item.estado) 'texto'
-    $serial = ''
-    if ($item.fecha) {
-      $serial = [string][int]([datetime]::ParseExact([string]$item.fecha, 'yyyy-MM-dd', $null) - [datetime]'1899-12-30').TotalDays
+    # formato nuevo ({campos}) y antiguo ({estado, fecha})
+    $campos = $item.campos
+    if (-not $campos) { $campos = [pscustomobject]@{ estado = $item.estado; fechaSalida = $item.fecha } }
+    $nueva = $fila
+    # A = articulo, B = titulo (como en el listado original)
+    if ($null -ne $campos.titulo) {
+      $articulo = ''; $titulo = [string]$campos.titulo
+      $mm = [regex]::Match($titulo, '^(?i)(el|la|los|las|un|una|unos|unas)\s+(.+)$')
+      if ($mm.Success) { $articulo = $mm.Groups[1].Value; $titulo = $mm.Groups[2].Value }
+      $nueva = PonerCelda $nueva $filaNum 'A' $articulo 'texto'
+      $nueva = PonerCelda $nueva $filaNum 'B' $titulo 'texto'
     }
-    $nueva = PonerCelda $nueva $filaNum 'J' $serial 'numero'
+    if ($null -ne $campos.autor)         { $nueva = PonerCelda $nueva $filaNum 'C' ([string]$campos.autor) 'texto' }
+    if ($null -ne $campos.editorial)     { $nueva = PonerCelda $nueva $filaNum 'D' ([string]$campos.editorial) 'texto' }
+    if ($null -ne $campos.signatura)     { $nueva = PonerCelda $nueva $filaNum 'E' ([string]$campos.signatura) 'texto' }
+    if ($null -ne $campos.estanteria)    { $nueva = PonerCelda $nueva $filaNum 'F' ([string]$campos.estanteria) 'texto' }
+    if ($null -ne $campos.balda)         { $nueva = PonerCelda $nueva $filaNum 'G' ([string]$campos.balda) 'texto' }
+    if ($null -ne $campos.estado)        { $nueva = PonerCelda $nueva $filaNum 'H' ([string]$campos.estado) 'texto' }
+    if ($null -ne $campos.fechaSalida) {
+      $serial = ''
+      if ($campos.fechaSalida) {
+        $serial = [string][int]([datetime]::ParseExact([string]$campos.fechaSalida, 'yyyy-MM-dd', $null) - [datetime]'1899-12-30').TotalDays
+      }
+      $nueva = PonerCelda $nueva $filaNum 'J' $serial 'numero'
+    }
+    if ($null -ne $campos.observaciones) { $nueva = PonerCelda $nueva $filaNum 'K' ([string]$campos.observaciones) 'texto' }
     if ($nueva -ne $fila) {
       $xml = $xml.Substring(0, $m.Index) + $etiqueta + $nueva + '</row>' + $xml.Substring($m.Index + $m.Length)
       $cambios++

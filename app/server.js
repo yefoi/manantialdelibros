@@ -226,10 +226,14 @@ function leerColaExcel() { return leerJson(EXCEL_PENDIENTE_PATH, { items: [] });
 function escribirColaExcel(cola) { escribirJson(EXCEL_PENDIENTE_PATH, cola); }
 function hayPendientesExcel() { const c = leerColaExcel(); return !!(c.items && c.items.length); }
 
-function marcarPendienteExcel(id, fila, estado, fecha) {
+// campos de la ficha que viven en columnas del Excel
+const CAMPOS_EXCEL = ['titulo', 'autor', 'editorial', 'signatura', 'estanteria', 'balda', 'observaciones'];
+
+function marcarPendienteExcel(id, fila, campos) {
+  if (!fila || fila <= 0 || !campos || !Object.keys(campos).length) return;
   const cola = leerColaExcel();
   cola.items = (cola.items || []).filter(i => i.id !== id);
-  cola.items.push({ id, fila, estado, fecha: fecha || '' });
+  cola.items.push({ id, fila, campos });
   escribirColaExcel(cola);
   volcarColaExcel();
 }
@@ -254,14 +258,21 @@ function volcarColaExcel(cb) {
     retrasoExcel = 5000;
     const cambios = leerJson(CAMBIOS_PATH, {});
     for (const it of items) {
-      if (cambios[it.id]) cambios[it.id]._excelEstado = it.estado;
+      const c = cambios[it.id];
+      if (!c) continue;
+      // formato nuevo ({campos}) y antiguo ({estado, fecha})
+      const campos = it.campos || { estado: it.estado, fechaSalida: it.fecha };
+      if (campos.estado !== undefined) c._excelEstado = campos.estado;
+      const ficha = {};
+      for (const k of CAMPOS_EXCEL) if (campos[k] !== undefined) ficha[k] = campos[k];
+      if (Object.keys(ficha).length) c._excelCampos = Object.assign({}, c._excelCampos || {}, ficha);
     }
     escribirJson(CAMBIOS_PATH, cambios);
     escribirColaExcel({ items: [] });
     invalidarCatalogo();
     // el cambio del Excel lo hemos hecho nosotros: que el vigilante no reimporte
     try { firmaConocidaTexto = firmaActual().texto; } catch (e) { }
-    registrar('Cambios de estado pasados al Excel: ' + items.length + '.');
+    registrar('Cambios pasados al Excel: ' + items.length + '.');
     if (cb) cb(null);
   });
 }
@@ -283,7 +294,7 @@ function encolarCambiosAntiguos() {
     const cola = leerColaExcel();
     if ((cola.items || []).some(i => i.id === id)) continue;
     cola.items = cola.items || [];
-    cola.items.push({ id, fila: l.fila, estado: c.estado, fecha: c.fechaSalida || '' });
+    cola.items.push({ id, fila: l.fila, campos: { estado: c.estado, fechaSalida: c.fechaSalida || '' } });
     escribirColaExcel(cola);
     n++;
   }
@@ -501,15 +512,20 @@ function baseDeArchivo(libro) {
   const t = String(libro.titulo || 'libro').replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
   return limpiarNombreArchivo(t.toLowerCase()) || 'libro';
 }
+function normalizarCampo(v) {
+  return String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+}
 // Guarda los datos de la ficha en el .docx del libro (en la carpeta de fotos,
-// o en datos/subidas si el libro se añadió desde el sitio). Devuelve el nombre
-// del documento actualizado, o '' si no se ha podido o no procede.
+// o en datos/subidas si el libro se añadió desde el sitio). Devuelve
+// { archivo, campos } con lo escrito (para poder conciliar despues), o null.
 function sincronizarDocx(libro) {
-  if (!libro || ajustes.sincronizarDocx === false) return '';
+  if (!libro || ajustes.sincronizarDocx === false) return null;
   const info = String(libro.infoArchivo || '');
   const campos = {
-    titulo: libro.titulo, autor: libro.autor, editorial: libro.editorial,
-    paginas: libro.paginas, genero: libro.genero, sinopsis: libro.sinopsis, fechaPublicacion: ''
+    titulo: normalizarCampo(libro.titulo), autor: normalizarCampo(libro.autor),
+    editorial: normalizarCampo(libro.editorial), paginas: normalizarCampo(libro.paginas),
+    genero: normalizarCampo(libro.genero), sinopsis: normalizarCampo(libro.sinopsis),
+    fechaPublicacion: ''
   };
   const enSubidas = info ? path.join(SUBIDAS, info) : '';
   const enOrigen = info ? path.join(ORIGEN, info) : '';
@@ -520,7 +536,7 @@ function sincronizarDocx(libro) {
     destino = enOrigen; nombre = info;
     try { campos.fechaPublicacion = extraerDocx(fs.readFileSync(enOrigen)).fechaPublicacion || ''; } catch (e) { }
   } else if (info && !info.toLowerCase().endsWith('.docx')) {
-    return '';   // pdf/txt de origen: no se tocan
+    return null;   // pdf/txt de origen: no se tocan
   } else if (ORIGEN && fs.existsSync(ORIGEN) && libro.origen !== 'nuevo' && libro.origen !== 'huerfano') {
     nombre = limpiarNombreArchivo(baseDeArchivo(libro) + ' 03.docx');
     destino = path.join(ORIGEN, nombre);
@@ -531,10 +547,10 @@ function sincronizarDocx(libro) {
   try {
     fs.writeFileSync(destino, crearDocx(campos));
     registrar('Documento de ficha actualizado: ' + destino);
-    return nombre;
+    return { archivo: nombre, campos };
   } catch (e) {
     registrar('Aviso: no se ha podido actualizar el documento de ' + libro.id + ': ' + e.message);
-    return '';
+    return null;
   }
 }
 
@@ -729,9 +745,30 @@ async function api(req, res, url) {
     } else {
       guardarCambio(e.id, e.antes);
       libro = buscarLibro(e.id);
-      // si era un estado y el libro viene del listado, tambien se devuelve en el Excel
-      if (e.accion === 'estado' && libro && libro.fila && e.antes.estado !== undefined) {
-        marcarPendienteExcel(libro.id, libro.fila, libro.estado, libro.fechaSalida || '');
+      if (libro && e.accion === 'ficha') {
+        // la ficha restaurada se devuelve tambien al .docx
+        const hecho = sincronizarDocx(libro);
+        if (hecho) {
+          const cc = leerJson(CAMBIOS_PATH, {});
+          if (cc[libro.id]) {
+            cc[libro.id]._docxArchivo = hecho.archivo;
+            cc[libro.id]._docxCampos = hecho.campos;
+            if (hecho.archivo !== libro.infoArchivo) cc[libro.id].infoArchivo = hecho.archivo;
+            escribirJson(CAMBIOS_PATH, cc);
+            invalidarCatalogo();
+            libro = buscarLibro(libro.id);
+          }
+        }
+      }
+      // los campos del Excel se devuelven al Excel
+      if (libro && libro.fila) {
+        const paraExcel = {};
+        for (const k of CAMPOS_EXCEL) if (e.antes && e.antes[k] !== undefined) paraExcel[k] = e.antes[k];
+        if (e.accion === 'estado' && e.antes && e.antes.estado !== undefined) {
+          paraExcel.estado = libro.estado;
+          paraExcel.fechaSalida = libro.fechaSalida || '';
+        }
+        marcarPendienteExcel(libro.id, libro.fila, paraExcel);
       }
     }
     e.deshecho = true;
@@ -904,8 +941,8 @@ async function api(req, res, url) {
       creado: new Date().toISOString(), origen: 'nuevo'
     };
     if (libro.sinopsis || libro.paginas) {
-      const docNuevo = sincronizarDocx(libro);
-      if (docNuevo) libro.infoArchivo = docNuevo;
+      const hecho = sincronizarDocx(libro);
+      if (hecho) libro.infoArchivo = hecho.archivo;
     }
     const nuevos = leerJson(NUEVOS_PATH, []);
     nuevos.push(libro);
@@ -943,21 +980,38 @@ async function api(req, res, url) {
       const esEstado = Object.keys(campos).every(k => k === 'estado' || k === 'fechaSalida');
       // los cambios de ficha se escriben tambien en el .docx del libro
       let docxActualizado = '';
+      let snapshotDocx = null;
       if (!esEstado) {
-        docxActualizado = sincronizarDocx(Object.assign({}, actual, campos));
-        if (docxActualizado && docxActualizado !== actual.infoArchivo) campos.infoArchivo = docxActualizado;
+        const hecho = sincronizarDocx(Object.assign({}, actual, campos));
+        if (hecho) {
+          docxActualizado = hecho.archivo;
+          snapshotDocx = hecho;
+          if (hecho.archivo !== actual.infoArchivo) campos.infoArchivo = hecho.archivo;
+        }
       }
       const antes = camposAntesDe(actual, campos);
       guardarCambio(id, campos);
+      if (snapshotDocx) {
+        const cc = leerJson(CAMBIOS_PATH, {});
+        if (cc[id]) {
+          cc[id]._docxArchivo = snapshotDocx.archivo;
+          cc[id]._docxCampos = snapshotDocx.campos;
+          escribirJson(CAMBIOS_PATH, cc);
+          invalidarCatalogo();
+        }
+      }
       const detalle = esEstado
         ? (String(antes.estado || 'sin estado') + ' -> ' + String(campos.estado || 'sin estado'))
         : Object.keys(campos).join(', ');
       anotarCambio(req, esEstado ? 'estado' : 'ficha', id, actual.titulo, detalle, antes, campos);
-      // el estado tambien se pasa al Excel (si el libro viene del listado)
-      if (campos.estado !== undefined && actual.fila) {
-        const despues = buscarLibro(id) || actual;
-        marcarPendienteExcel(id, actual.fila, campos.estado, despues.fechaSalida || '');
+      // los cambios de ficha (y el estado) se pasan tambien al Excel
+      const paraExcel = {};
+      for (const k of CAMPOS_EXCEL) if (campos[k] !== undefined) paraExcel[k] = campos[k];
+      if (campos.estado !== undefined) {
+        paraExcel.estado = campos.estado;
+        paraExcel.fechaSalida = (buscarLibro(id) || actual).fechaSalida || '';
       }
+      if (actual.fila) marcarPendienteExcel(id, actual.fila, paraExcel);
       registrar('Editado ' + id + ': ' + Object.keys(campos).join(', '));
       return enviarJson(res, 200, { ok: true, libro: buscarLibro(id), docx: docxActualizado });
     }
