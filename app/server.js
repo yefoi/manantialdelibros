@@ -499,6 +499,13 @@ async function api(req, res, url) {
     return enviarJson(res, 200, nov);
   }
 
+  // ---- diagnostico de nombres y asignacion de archivos de la ultima importacion
+  if (ruta === '/api/diagnostico' && metodo === 'GET') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    const diag = leerJson(path.join(DATOS, 'diagnostico.json'), { generado: '', totalArchivos: 0, totalAvisos: 0, avisos: [] });
+    return enviarJson(res, 200, diag);
+  }
+
   // ---- rutas del Excel y de la carpeta de fotos
   if (ruta === '/api/rutas' && metodo === 'GET') {
     if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');

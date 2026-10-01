@@ -17,7 +17,8 @@
     imagenActiva: 0,
     version: '',
     actualizando: false,
-    novedades: { altas: [], bajas: [] }
+    novedades: { altas: [], bajas: [] },
+    diagnostico: { avisos: [], totalArchivos: 0 }
   };
 
   /* ------------------------------------------------------------ utilidades */
@@ -479,12 +480,49 @@
         '<span class="sub">' + escap([l.autor, l.editorial, l.observaciones].filter(Boolean).join(' · ')) + '</span></span>' +
         '<span class="donde">' + escap(donde) + '</span></' + etiqueta + '>';
     }).join('') : '<p class="revision-vacio">No hay libros en esta lista.</p>';
+
+    pintarDiagnostico();
+  }
+
+  /* ------------------------------------------- diagnostico de archivos */
+  function diagnosticoFila(it) {
+    const etiqueta = it.id ? 'button' : 'div';
+    return '<' + etiqueta + ' class="revision-fila ' + (it.id ? 'pulsable' : '') + '" ' +
+      (it.id ? 'type="button" data-id="' + escap(it.id) + '"' : '') + '>' +
+      '<span class="texto"><span class="titulo">' + escap(it.texto || '') + '</span>' +
+      (it.detalle ? '<span class="sub">' + escap(it.detalle) + '</span>' : '') + '</span></' + etiqueta + '>';
+  }
+
+  function pintarDiagnostico() {
+    const caja = $('#diagnosticoCaja');
+    if (!caja) return;
+    caja.hidden = false;
+    const diag = estado.diagnostico || { avisos: [], totalArchivos: 0 };
+    const avisos = (diag.avisos || []).filter((a) => (a.items || []).length);
+    const total = avisos.reduce((n, a) => n + a.items.length, 0);
+    $('#diagnosticoTotal').textContent = total
+      ? total.toLocaleString('es-ES') + ' aviso' + (total === 1 ? '' : 's') +
+        ' en ' + avisos.length + ' grupo' + (avisos.length === 1 ? '' : 's')
+      : 'todo correcto';
+    $('#diagnosticoResumen').textContent = 'Se han revisado ' +
+      Number(diag.totalArchivos || 0).toLocaleString('es-ES') +
+      ' archivos de la carpeta de fotos. Son avisos de nombres y asignación: no se toca ni el Excel ni la carpeta.';
+    $('#diagnosticoLista').innerHTML = avisos.length ? avisos.map((a) =>
+      '<section class="diagnostico-grupo">' +
+        '<h4>' + escap(a.nombre) + ' <b>' + (a.items || []).length.toLocaleString('es-ES') + '</b></h4>' +
+        (a.detalle ? '<p class="nota">' + escap(a.detalle) + '</p>' : '') +
+        '<div class="revision-lista">' + (a.items || []).slice(0, 60).map(diagnosticoFila).join('') + '</div>' +
+        ((a.items || []).length > 60
+          ? '<p class="nota">Se muestran los primeros 60 de ' + a.items.length.toLocaleString('es-ES') + '.</p>' : '') +
+      '</section>'
+    ).join('') : '<p class="revision-vacio">No se han encontrado problemas de nombres ni archivos sin asignar.</p>';
   }
 
   async function abrirRevision() {
     const panel = $('#panelRevision');
     if (!panel.open) panel.showModal();
     try { estado.novedades = await api('/api/novedades'); } catch (e) { estado.novedades = { altas: [], bajas: [] }; }
+    try { estado.diagnostico = await api('/api/diagnostico'); } catch (e) { estado.diagnostico = { avisos: [], totalArchivos: 0 }; }
     pintarRevision();
   }
 
@@ -503,6 +541,78 @@
     setTimeout(() => URL.revokeObjectURL(enlace.href), 5000);
   }
 
+  /* ------------------------------------------- mapa de estanterias */
+  function mapaChip(l) {
+    const ayuda = (ETIQUETA_ESTADO[l.estado] || 'Sin estado') + (l.autor ? ' · ' + l.autor : '');
+    return '<button type="button" class="mapa-libro" data-id="' + escap(l.id) + '" title="' + escap(ayuda) + '">' +
+      '<span class="punto ' + (l.estado ? 'punto-' + norm(l.estado) : 'punto-vacia') + '"></span>' +
+      '<span class="mapa-libro-texto"><b>' + escap(l.titulo) + '</b>' +
+      (l.autor ? '<small>' + escap(l.autor) + '</small>' : '') + '</span></button>';
+  }
+
+  function claveBalda(a, b) {
+    if (a === '') return 1;
+    if (b === '') return -1;
+    return a.localeCompare(b, 'es', { numeric: true });
+  }
+
+  function pintarMapa() {
+    const filtro = norm($('#mapaBuscar').value);
+    const estantes = new Map();
+    let total = 0, donados = 0;
+    for (const l of estado.libros) {
+      if (l.estado === 'Donado') { donados++; continue; }
+      if (filtro && !norm([l.titulo, l.autor, l.editorial, l.signatura].join(' ')).includes(filtro)) continue;
+      const est = l.estanteria ? String(l.estanteria) : '';
+      const balda = l.balda ? String(l.balda) : '';
+      if (!estantes.has(est)) estantes.set(est, new Map());
+      const baldas = estantes.get(est);
+      if (!baldas.has(balda)) baldas.set(balda, []);
+      baldas.get(balda).push(l);
+      total++;
+    }
+    const listaEstantes = Array.from(estantes.keys()).sort((a, b) => {
+      if (a === '') return 1;
+      if (b === '') return -1;
+      const na = parseFloat(a.replace(',', '.'));
+      const nb = parseFloat(b.replace(',', '.'));
+      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+      return a.localeCompare(b, 'es', { numeric: true });
+    });
+    const conEstante = listaEstantes.filter((e) => e !== '').length;
+    $('#mapaResumen').textContent = total.toLocaleString('es-ES') +
+      (total === 1 ? ' libro' : ' libros') + ' en ' + conEstante +
+      (conEstante === 1 ? ' estantería' : ' estanterías') +
+      (donados ? ' · ' + donados.toLocaleString('es-ES') + ' donados no se muestran' : '') +
+      (filtro ? ' · filtro: «' + $('#mapaBuscar').value.trim() + '»' : '');
+    $('#mapaEstantes').innerHTML = listaEstantes.length ? listaEstantes.map((est) => {
+      const baldas = estantes.get(est);
+      const librosEstante = Array.from(baldas.values()).reduce((n, x) => n + x.length, 0);
+      const listaBaldas = Array.from(baldas.keys()).sort(claveBalda);
+      return '<section class="mapa-estante">' +
+        '<header class="mapa-estante-cabecera"><h3>' + (est ? 'Estantería ' + escap(est) : 'Sin estantería') + '</h3>' +
+        '<span>' + librosEstante.toLocaleString('es-ES') + ' libro' + (librosEstante === 1 ? '' : 's') + '</span></header>' +
+        listaBaldas.map((balda) => {
+          const libros = baldas.get(balda).slice().sort((a, b) =>
+            claveTitulo(a.titulo).localeCompare(claveTitulo(b.titulo), 'es'));
+          const etiqueta = (!balda || balda === '0')
+            ? (est ? 'Sin balda concreta' : 'Sin ubicación')
+            : 'Balda ' + escap(balda);
+          return '<div class="mapa-balda"><p class="mapa-balda-titulo">' + etiqueta +
+            ' <b>' + libros.length + '</b></p><div class="mapa-libros">' +
+            libros.map(mapaChip).join('') + '</div></div>';
+        }).join('') +
+        '</section>';
+    }).join('') : '<p class="revision-vacio">No hay libros que mostrar' + (filtro ? ' con ese filtro.' : '.') + '</p>';
+  }
+
+  function abrirMapa() {
+    const panel = $('#panelMapa');
+    if (!panel.open) panel.showModal();
+    $('#mapaBuscar').value = '';
+    pintarMapa();
+  }
+
   /* ------------------------------------------------------------ arranque */
   async function cargarSesion() {
     try { estado.sesion = await api('/api/estado'); } catch (e) { /* sin conexion */ }
@@ -519,8 +629,10 @@
     pintarFranja();
     if ($('#panelRevision').open) {
       try { estado.novedades = await api('/api/novedades'); } catch (e) { /* nada */ }
+      try { estado.diagnostico = await api('/api/diagnostico'); } catch (e) { /* nada */ }
       pintarRevision();
     }
+    if ($('#panelMapa').open) pintarMapa();
   }
 
   /* -------------------------------------------------- aviso de catalogo */
@@ -727,6 +839,14 @@
       } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     });
 
+    // mapa de estanterias
+    $('#btnMapa').addEventListener('click', abrirMapa);
+    $('#mapaBuscar').addEventListener('input', pintarMapa);
+    $('#mapaEstantes').addEventListener('click', (e) => {
+      const b = e.target.closest('.mapa-libro');
+      if (b) abrirDetalle(b.dataset.id);
+    });
+
     // revision del catalogo
     $('#btnRevision').addEventListener('click', abrirRevision);
     $('#revisionGrupos').addEventListener('click', (e) => {
@@ -740,6 +860,10 @@
     $('#revisionEstado').addEventListener('change', () => pintarRevision());
     $('#revisionEstanteria').addEventListener('change', () => pintarRevision());
     $('#revisionLista').addEventListener('click', (e) => {
+      const fila = e.target.closest('[data-id]');
+      if (fila) abrirDetalle(fila.dataset.id);
+    });
+    $('#diagnosticoLista').addEventListener('click', (e) => {
       const fila = e.target.closest('[data-id]');
       if (fila) abrirDetalle(fila.dataset.id);
     });

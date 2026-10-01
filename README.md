@@ -104,6 +104,10 @@ a la que pertenece la biblioteca.
 `web\` es HTML, CSS y JavaScript sin frameworks. Portada minimalista, buscador que ignora
 acentos, filtros por estado y categoría, ficha con galería de imágenes y acciones de socio.
 
+El botón **Estanterías** abre el mapa de la biblioteca: estantería por estantería y balda por
+balda, con el estado de cada libro (los donados no aparecen, porque ya no están en las
+estanterías); al pulsar un libro se abre su ficha. Incluye buscador propio.
+
 ---
 
 ## Tareas habituales
@@ -135,6 +139,14 @@ usa ese archivo y el propio catálogo para ofrecer las listas de trabajo:
 
 Con filtro por estantería, búsqueda, apertura de la ficha al pulsar y descarga en CSV (con BOM,
 separador `;`, listo para Excel).
+
+Al pie de la pantalla aparece el bloque **Diagnóstico de archivos**, con avisos sobre los nombres
+de los archivos de la carpeta de fotos: imágenes sin `01`/`02`, imágenes numeradas como `03`,
+numeración no reconocida, varios documentos para el mismo libro, fotos compartidas por varias
+fichas, extensiones no soportadas (por ejemplo fotos HEIC del móvil), fichas creadas desde
+archivos, emparejamientos ambiguos y archivos sin asignar. Se guarda además en
+`datos\diagnostico.json` y en `datos\revision.txt`. Es solo informativo: no modifica el Excel
+ni la carpeta de fotos.
 
 ## Rutas configurables desde el sitio
 

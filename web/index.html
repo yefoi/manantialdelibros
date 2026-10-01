@@ -28,6 +28,7 @@
       <span class="fundacion-texto"><small>Fundación</small><strong>Manantial</strong></span>
     </a>
     <nav class="cabecera-acciones">
+      <button class="boton boton-fantasma" id="btnMapa">Estanterías</button>
       <button class="boton boton-fantasma solo-socios" id="btnRevision" hidden>Revisión</button>
       <button class="boton boton-fantasma solo-socios" id="btnNuevoLibro" hidden>Añadir libro</button>
       <button class="boton boton-fantasma solo-socios" id="btnAjustes" hidden>Ajustes</button>
@@ -237,10 +238,37 @@
     <p class="contador" id="revisionContador"></p>
     <p class="revision-pista" id="revisionPista" hidden></p>
     <div class="revision-lista" id="revisionLista"></div>
+    <details class="diagnostico" id="diagnosticoCaja" hidden>
+      <summary>Diagnóstico de archivos <b id="diagnosticoTotal"></b></summary>
+      <p class="nota" id="diagnosticoResumen"></p>
+      <div id="diagnosticoLista"></div>
+    </details>
     <div class="formulario-acciones">
       <button class="boton boton-contorno" type="button" id="btnRevisionCsv">Descargar lista (CSV)</button>
       <button class="boton boton-contorno" type="button" id="btnRevisionCerrar">Cerrar</button>
     </div>
+  </div>
+</dialog>
+
+<!-- ------------------------------ mapa de estanterias ------------------------------ -->
+<dialog class="panel panel-mapa" id="panelMapa">
+  <div class="panel-cabecera">
+    <p class="panel-etiqueta">Estanterías de la biblioteca</p>
+    <button class="cerrar" data-cerrar aria-label="Cerrar">×</button>
+  </div>
+  <div class="panel-cuerpo">
+    <p class="nota" id="mapaResumen"></p>
+    <div class="revision-filtros mapa-filtros">
+      <label class="campo"><span>Buscar en el mapa</span>
+        <input type="search" id="mapaBuscar" placeholder="título, autor…" autocomplete="off"></label>
+      <p class="mapa-leyenda">
+        <span><i class="punto punto-disponible"></i>Disponible</span>
+        <span><i class="punto punto-prestado"></i>Prestado</span>
+        <span><i class="punto punto-vacia"></i>Sin estado</span>
+        <span class="mapa-leyenda-nota">Los donados no se muestran</span>
+      </p>
+    </div>
+    <div class="mapa-estantes" id="mapaEstantes"></div>
   </div>
 </dialog>
 

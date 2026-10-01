@@ -10,6 +10,8 @@ Muestra los libros del listado (Excel) y las fotos e información de la
 carpeta "libros FINAL".
 
   · Las personas invitadas solo pueden VER los libros y su información.
+  · El botón "Estanterías" muestra el mapa de la biblioteca: estantería
+    por estantería y balda por balda, para encontrar cada libro en el local.
   · Los socios, entrando con el usuario y la contraseña, pueden:
       - cambiar el estado de cada libro (Disponible / Prestado / Donado)
       - subir portada, contraportada e información (.docx, .txt, .pdf)

@@ -455,6 +455,56 @@ body.socio .solo-socios-detalle { display: block; }
   margin: -8px 0 14px; padding: 10px 13px; border-radius: 9px; font-size: .84rem;
   background: var(--azul-claro); color: var(--azul-oscuro);
 }
+.diagnostico { margin: 0 0 18px; border: 1px solid var(--borde); border-radius: 10px; background: var(--superficie); }
+.diagnostico summary {
+  cursor: pointer; padding: 11px 14px; font-family: var(--titulo); font-weight: 600; font-size: .9rem;
+  color: var(--tinta); list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.diagnostico summary::-webkit-details-marker { display: none; }
+.diagnostico summary b { color: var(--tinta-suave); font-weight: 500; font-size: .82rem; }
+.diagnostico[open] summary { border-bottom: 1px solid var(--borde); }
+.diagnostico > .nota { padding: 10px 14px 0; }
+.diagnostico-grupo { padding: 12px 14px 0; }
+.diagnostico-grupo h4 { margin: 0 0 4px; font-family: var(--titulo); font-size: .88rem; color: var(--tinta); }
+.diagnostico-grupo h4 b { color: var(--azul); }
+.diagnostico-grupo .revision-lista { max-height: 30vh; margin-bottom: 4px; }
+.diagnostico #diagnosticoLista > .revision-vacio { padding: 18px; }
+
+/* ---------------------------------------------------------------- mapa de estanterias */
+.panel-mapa { width: min(1080px, 94vw); }
+.mapa-filtros { margin-bottom: 14px; }
+.mapa-leyenda { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin: 0; color: var(--tinta-suave); font-size: .8rem; }
+.mapa-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.mapa-leyenda-nota { color: var(--tinta-tenue); }
+.punto-vacia { background: var(--tinta-tenue); }
+.mapa-estantes { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; align-items: start; }
+.mapa-estante { border: 1px solid var(--borde); border-radius: 12px; background: var(--superficie); overflow: hidden; }
+.mapa-estante-cabecera {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 10px 13px; background: var(--papel-2); border-bottom: 1px solid var(--borde);
+}
+.mapa-estante-cabecera h3 { margin: 0; font-family: var(--titulo); font-size: .95rem; color: var(--tinta); }
+.mapa-estante-cabecera span { color: var(--tinta-tenue); font-size: .76rem; }
+.mapa-balda { padding: 6px 13px 0; }
+.mapa-balda + .mapa-balda { border-top: 1px dashed var(--borde); }
+.mapa-balda-titulo {
+  margin: 6px 0; color: var(--tinta-suave); font-size: .74rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.mapa-balda-titulo b { color: var(--azul); font-weight: 600; }
+.mapa-libros { display: flex; flex-direction: column; gap: 3px; padding-bottom: 8px; }
+.mapa-libro {
+  display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 6px 8px;
+  border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; font: inherit;
+}
+.mapa-libro:hover { background: var(--papel-2); }
+.mapa-libro .punto { margin-top: 4px; }
+.mapa-libro-texto { min-width: 0; display: flex; flex-direction: column; }
+.mapa-libro-texto b {
+  font-family: var(--titulo); font-size: .86rem; font-weight: 600; color: var(--tinta);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mapa-libro-texto small { color: var(--tinta-suave); font-size: .75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------------------------------------------------------------- avisos */
 .aviso-catalogo {

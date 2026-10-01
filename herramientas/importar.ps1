@@ -18,6 +18,15 @@ if (-not $Ajustes) { $Ajustes = Join-Path $Raiz 'datos\ajustes.json' }
 # ---------------------------------------------------------------- utilidades
 function Escribir([string]$msg) { if (-not $Silencioso) { Write-Host $msg } }
 
+# avisos del diagnostico de nombres y archivos (solo informativos)
+function Nuevo-Aviso([string]$id, [string]$nombre, [string]$detalle, $items) {
+  if (-not $items -or @($items).Count -eq 0) { return }
+  [void]$script:avisos.Add([pscustomobject]@{ id = $id; nombre = $nombre; detalle = $detalle; total = @($items).Count; items = @($items) })
+}
+function Item-Aviso([string]$texto, [string]$detalle, [string]$id) {
+  return [pscustomobject]@{ texto = $texto; detalle = $detalle; id = $id }
+}
+
 function Normalizar([string]$s) {
   if ($null -eq $s) { return '' }
   $t = $s.Normalize([Text.NormalizationForm]::FormD)
@@ -236,6 +245,19 @@ Escribir "Indexando archivos..."
 $archivos = Get-ChildItem -Path $OrigenLibros -File |
   Where-Object { $_.Extension.ToLower() -in '.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt', '.pdf' -and $_.Name -notlike '~$*' -and $_.Name -notmatch 'plantilla' }
 
+# archivos que el importador no lee (fotos del movil, otros formatos...)
+$extensionesLeidas = @('.jpg', '.jpeg', '.png', '.docx', '.doc', '.txt', '.pdf')
+$archivosIgnoradosPorExtension = @(Get-ChildItem -Path $OrigenLibros -File |
+  Where-Object { $_.Extension.ToLower() -notin $extensionesLeidas -and $_.Name -notlike '~$*' -and
+                 $_.Name -notmatch 'plantilla' -and $_.Name -notin 'Thumbs.db', 'desktop.ini', '.DS_Store' })
+
+# listas para el diagnostico de nombres
+$avisos = New-Object Collections.ArrayList
+$imagenSinNumero = New-Object Collections.ArrayList
+$imagenNumeroTres = New-Object Collections.ArrayList
+$numeracionRara = New-Object Collections.ArrayList
+$ambiguosLista = New-Object Collections.ArrayList
+
 $grupos = @{}   # clave -> @{ letra -> @{ img1=@(); img2=@(); docs=@() } }
 foreach ($a in $archivos) {
   $base = $a.BaseName
@@ -253,6 +275,17 @@ foreach ($a in $archivos) {
     $letra = $m.Groups['letra'].Value
   }
   if (-not $nombre) { continue }
+  # diagnostico de numeracion (una sola vez por archivo)
+  if (-not $numero) {
+    $mn = [regex]::Match($base, '[\s_-]+0?(?<num>\d{1,2})$')
+    if ($mn.Success) {
+      [void]$numeracionRara.Add((Item-Aviso $a.Name ("acaba en " + $mn.Groups['num'].Value + "; solo se reconocen 01, 02 y 03") ''))
+    } elseif ($esImagen) {
+      [void]$imagenSinNumero.Add((Item-Aviso $a.Name 'no lleva numero; para usarla debe acabar en " 01" (portada) o " 02" (contraportada)' ''))
+    }
+  } elseif ($esImagen -and $numero -eq '3') {
+    [void]$imagenNumeroTres.Add((Item-Aviso $a.Name 'el 03 es para documentos de informacion, no para imagenes' ''))
+  }
   foreach ($k in (Claves $nombre)) {
     if (-not $grupos.ContainsKey($k)) { $grupos[$k] = @{} }
     if (-not $grupos[$k].ContainsKey($letra)) { $grupos[$k][$letra] = @{ nombre = $nombre; img1 = @(); img2 = @(); docs = @() } }
@@ -374,7 +407,12 @@ foreach ($entrada in ($gruposLibres.Values | Sort-Object { $_.Clave })) {
       $p = Similitud $k $cand.Clave
       if ($p -gt $segundoPunt) { $segundoPunt = $p; $otro = $cand }
     }
-    if ($segundoPunt -ge ($mejorPunt - 0.02)) { $ambiguos++ ; continue }   # demasiado parecido: lo dejamos para revision
+    if ($segundoPunt -ge ($mejorPunt - 0.02)) {   # demasiado parecido: lo dejamos para revision
+      $ambiguos++
+      $otroTitulo = if ($otro) { $otro.Libro.titulo } else { '?' }
+      [void]$ambiguosLista.Add((Item-Aviso $entrada.G.nombre ("parecido a """ + $mejor.Libro.titulo + """ y a """ + $otroTitulo + """; no se ha asignado") ''))
+      continue
+    }
     $g = $entrada.G
     $l = $mejor.Libro
     $l.portadas = @($g.img1)
@@ -555,7 +593,99 @@ foreach ($k in ($grupos.Keys | Sort-Object)) {
   }
 }
 if ($resto.Count) { foreach ($n in ($resto | Sort-Object -Unique)) { [void]$informe.Add("  $n") } } else { [void]$informe.Add("  (ninguno)") }
+
+# --------------------------------------- diagnostico de nombres y asignacion
+# Solo informativo: no modifica ni el Excel ni la carpeta de fotos.
+$itemsCompartidas = New-Object Collections.ArrayList
+$usoFotos = @{}
+foreach ($l in $libros) {
+  foreach ($n in @($l.portadas) + @($l.contraportadas)) {
+    if (-not $usoFotos.ContainsKey($n)) { $usoFotos[$n] = New-Object Collections.ArrayList }
+    [void]$usoFotos[$n].Add($l)
+  }
+}
+foreach ($n in ($usoFotos.Keys | Sort-Object)) {
+  $ls = @($usoFotos[$n] | Sort-Object { $_.id } | Select-Object -Unique)
+  if ($ls.Count -gt 1) {
+    [void]$itemsCompartidas.Add((Item-Aviso $n (($ls | ForEach-Object { $_.titulo }) -join ' / ') $ls[0].id))
+  }
+}
+Nuevo-Aviso 'fotosCompartidas' 'Fotos usadas por mas de un libro' 'El mismo archivo aparece en varias fichas (normalmente falta el sufijo a/b de los tomos).' $itemsCompartidas
+
+$itemsTrasera = New-Object Collections.ArrayList
+foreach ($l in $libros) {
+  if (@($l.contraportadas).Count -gt 0 -and @($l.portadas).Count -eq 0) {
+    [void]$itemsTrasera.Add((Item-Aviso $l.titulo (($l.contraportadas -join ', ') + ' (hay 02 pero no 01)') $l.id))
+  }
+}
+Nuevo-Aviso 'contraportadaSinPortada' 'Contraportada sin portada' 'Tienen foto 02 pero no 01; el catalogo las muestra como "Sin portada".' $itemsTrasera
+
+$itemsDocs = New-Object Collections.ArrayList
+$vistosDocs = @{}
+foreach ($k in ($grupos.Keys | Sort-Object)) {
+  foreach ($letra in ($grupos[$k].Keys | Sort-Object)) {
+    $g = $grupos[$k][$letra]
+    if (@($g.docs).Count -le 1) { continue }
+    $firma = (@($g.docs) | Sort-Object) -join '|'
+    if ($vistosDocs.ContainsKey($firma)) { continue }
+    $vistosDocs[$firma] = $true
+    [void]$itemsDocs.Add((Item-Aviso $g.nombre ('se usa ' + $g.docs[0] + '; sin usar: ' + ((@($g.docs) | Select-Object -Skip 1) -join ', ')) ''))
+  }
+}
+Nuevo-Aviso 'variosDocumentos' 'Varios documentos para el mismo libro' 'Solo se lee el primero; los demas no se muestran en la ficha.' $itemsDocs
+
+Nuevo-Aviso 'imagenSinNumero' 'Imagenes sin numero 01/02' 'No siguen el patron "titulo 01.jpg"; no se han usado en ninguna ficha.' $imagenSinNumero
+Nuevo-Aviso 'imagenNumeroTres' 'Imagenes numeradas como 03' 'Para imagenes solo valen 01 (portada) y 02 (contraportada); el 03 es para documentos.' $imagenNumeroTres
+Nuevo-Aviso 'numeracionRara' 'Numeracion no reconocida' 'El nombre acaba en un numero distinto de 01, 02 o 03.' $numeracionRara
+
+$itemsExtension = New-Object Collections.ArrayList
+foreach ($a in $archivosIgnoradosPorExtension) {
+  [void]$itemsExtension.Add((Item-Aviso $a.Name ('extension ' + $a.Extension) ''))
+}
+Nuevo-Aviso 'extensiones' 'Archivos con extension no soportada' 'El importador solo lee jpg, jpeg, png, docx, doc, txt y pdf.' $itemsExtension
+
+$itemsFichas = New-Object Collections.ArrayList
+foreach ($l in $libros) {
+  if ($l.origen -eq 'carpeta') {
+    $susArchivos = @(@($l.portadas) + @($l.contraportadas) + @($l.infoArchivo)) | Where-Object { $_ }
+    [void]$itemsFichas.Add((Item-Aviso $l.titulo ($susArchivos -join ', ') $l.id))
+  }
+}
+Nuevo-Aviso 'fichasNuevas' 'Fichas creadas desde archivos' 'No estaban en el Excel; el catalogo las marca como "Por completar".' $itemsFichas
+
+Nuevo-Aviso 'ambiguos' 'Emparejamientos ambiguos descartados' 'El archivo se parecia a dos libros a la vez; revisa el nombre o pasalo al Excel.' $ambiguosLista
+
+$itemsIgnorados = New-Object Collections.ArrayList
+foreach ($n in ($resto | Sort-Object -Unique)) {
+  [void]$itemsIgnorados.Add((Item-Aviso $n 'no se corresponde con ningun libro' ''))
+}
+Nuevo-Aviso 'archivosIgnorados' 'Archivos sin asignar' 'No se han podido relacionar con ninguna ficha ni crear una nueva.' $itemsIgnorados
+
+[void]$informe.Add("")
+[void]$informe.Add("## Diagnostico de archivos")
+if (-not $avisos.Count) {
+  [void]$informe.Add("  (sin avisos)")
+} else {
+  foreach ($av in $avisos) {
+    [void]$informe.Add(("  {0} ({1}):" -f $av.nombre, $av.total))
+    foreach ($it in $av.items) {
+      $extra = if ($it.detalle) { "   [" + $it.detalle + "]" } else { "" }
+      [void]$informe.Add("     - " + $it.texto + $extra)
+    }
+  }
+}
 $informe -join "`r`n" | Set-Content -Path (Join-Path $Raiz 'datos\revision.txt') -Encoding UTF8
+
+$diag = [ordered]@{
+  generado = (Get-Date).ToString('s')
+  totalArchivos = $archivos.Count + $archivosIgnoradosPorExtension.Count
+  totalAvisos = $avisos.Count
+  avisos = @($avisos)
+}
+$diagTmp = Join-Path $Raiz 'datos\diagnostico.json.tmp'
+[IO.File]::WriteAllText($diagTmp, ($diag | ConvertTo-Json -Depth 6 -Compress), (New-Object Text.UTF8Encoding $false))
+Move-Item -Force $diagTmp (Join-Path $Raiz 'datos\diagnostico.json')
+Escribir ("  diagnostico de archivos: {0} aviso(s)" -f $avisos.Count)
 
 $novedades = [ordered]@{
   generado = (Get-Date).ToString('s')
