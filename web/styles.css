@@ -657,9 +657,8 @@ body.socio .solo-socios-detalle { display: block; }
 
   /* filtros */
   .barra-filtros { flex-direction: column; align-items: stretch; gap: 12px; padding-bottom: 14px; }
-  .filtros { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-  .filtros::-webkit-scrollbar { display: none; }
-  .pildora { flex: none; padding: 9px 15px; }
+  .filtros { width: 100%; max-width: 100%; min-width: 0; flex-wrap: wrap; gap: 8px; }
+  .pildora { padding: 9px 15px; }
   .filtros-secundarios { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: end; }
   .filtros-secundarios .campo-check { grid-column: 1 / -1; padding-bottom: 0; }
   .campo select, .campo input[type=text], .campo input[type=password],
