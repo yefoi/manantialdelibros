@@ -597,9 +597,11 @@
       const baldas = estantes.get(est);
       const librosEstante = Array.from(baldas.values()).reduce((n, x) => n + x.length, 0);
       const listaBaldas = Array.from(baldas.keys()).sort(claveBalda);
-      return '<section class="mapa-estante">' +
-        '<header class="mapa-estante-cabecera"><h3>' + (est ? 'Estantería ' + escap(est) : 'Sin estantería') + '</h3>' +
-        '<span>' + librosEstante.toLocaleString('es-ES') + ' libro' + (librosEstante === 1 ? '' : 's') + '</span></header>' +
+      const abierta = !!filtro || mapaEstado.get(est) === true;
+      return '<details class="mapa-estante" data-est="' + escap(est) + '"' + (abierta ? ' open' : '') + '>' +
+        '<summary class="mapa-estante-cabecera"><h3>' + (est ? 'Estantería ' + escap(est) : 'Sin estantería') + '</h3>' +
+        '<span>' + librosEstante.toLocaleString('es-ES') + ' libro' + (librosEstante === 1 ? '' : 's') + '</span>' +
+        '<i class="mapa-flecha" aria-hidden="true"></i></summary>' +
         listaBaldas.map((balda) => {
           const libros = baldas.get(balda).slice().sort((a, b) =>
             claveTitulo(a.titulo).localeCompare(claveTitulo(b.titulo), 'es'));
@@ -610,8 +612,31 @@
             ' <b>' + libros.length + '</b></p><div class="mapa-libros">' +
             libros.map(mapaChip).join('') + '</div></div>';
         }).join('') +
-        '</section>';
+        '</details>';
     }).join('') : '<p class="revision-vacio">No hay libros que mostrar' + (filtro ? ' con ese filtro.' : '.') + '</p>';
+
+    $$('.mapa-estante', $('#mapaEstantes')).forEach((d) => {
+      d.addEventListener('toggle', () => mapaEstado.set(d.dataset.est, d.open));
+    });
+    actualizarBotonMapa();
+  }
+
+  const mapaEstado = new Map();
+
+  function actualizarBotonMapa() {
+    const detalles = $$('.mapa-estante', $('#mapaEstantes'));
+    const boton = $('#btnMapaTodo');
+    if (!boton) return;
+    boton.hidden = !detalles.length;
+    boton.textContent = detalles.length && detalles.every((d) => d.open) ? 'Plegar todo' : 'Desplegar todo';
+  }
+
+  function mapaTodo() {
+    const detalles = $$('.mapa-estante', $('#mapaEstantes'));
+    if (!detalles.length) return;
+    const abrir = !detalles.every((d) => d.open);
+    detalles.forEach((d) => { d.open = abrir; mapaEstado.set(d.dataset.est, abrir); });
+    actualizarBotonMapa();
   }
 
   function abrirMapa() {
@@ -930,6 +955,7 @@
     // mapa de estanterias
     $('#btnMapa').addEventListener('click', abrirMapa);
     $('#mapaBuscar').addEventListener('input', pintarMapa);
+    $('#btnMapaTodo').addEventListener('click', mapaTodo);
     $('#mapaEstantes').addEventListener('click', (e) => {
       const b = e.target.closest('.mapa-libro');
       if (b) abrirDetalle(b.dataset.id);

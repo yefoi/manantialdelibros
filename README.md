@@ -106,7 +106,8 @@ acentos, filtros por estado y categoría, ficha con galería de imágenes y acci
 
 El botón **Estanterías** abre el mapa de la biblioteca: estantería por estantería y balda por
 balda, con el estado de cada libro (los donados no aparecen, porque ya no están en las
-estanterías); al pulsar un libro se abre su ficha. Incluye buscador propio.
+estanterías); al pulsar un libro se abre su ficha. Incluye buscador propio, las estanterías son
+plegables (la búsqueda abre las que tienen resultados) y hay un botón «Desplegar/Plegar todo».
 
 Los socios tienen además **Historial**: cada cambio de estado, de ficha, de archivos, alta o
 borrado queda anotado con el usuario, el dispositivo (IP), la fecha y el detalle, y la mayoría
