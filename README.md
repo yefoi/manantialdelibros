@@ -163,6 +163,14 @@ Windows (`/api/abrir`). Al guardar, `app\server.js` reescribe `ajustes.json` y l
 reimportación. Mientras una ruta no sea válida, el sitio sigue sirviendo el último catálogo bueno.
 
 
+## Libros añadidos desde la web
+
+Los libros nuevos se guardan en `datos\nuevos.json` y sus archivos en `datos\subidas\`. Cuando el
+libro esté listo, el botón **Exportar al listado** (socios, en la ficha) escribe su fila al final
+del Excel, copia la portada como `<título> 01.ext`, la contraportada como `02.ext` y el documento
+como `03.ext` a la carpeta de fotos, y convierte la ficha en una del listado (el historial pasa al
+id nuevo, sin duplicados). Solo se exportan la primera portada y la primera contraportada.
+
 ## Estado del sistema
 
 Dentro de *Ajustes* (socios) hay un bloque plegable **Estado del sistema** con semáforos: servidor

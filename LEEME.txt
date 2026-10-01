@@ -14,6 +14,10 @@ carpeta "libros FINAL".
     por estantería y balda por balda, para encontrar cada libro en el local.
   · Los socios tienen además "Historial": quién cambió cada ficha o
     estado y cuándo, con un botón "Deshacer" para revertir el cambio.
+  · Un libro creado desde "Añadir libro" se puede pasar al listado y a
+    la carpeta con el botón "Exportar al listado" de su ficha: le añade
+    la fila en el Excel y copia sus fotos y documento con el nombre
+    estándar.
   · Al guardar una ficha (sinopsis, autor, páginas…), esos datos se
     escriben también en el documento .docx y en el Excel; y al revés:
     si editas a mano el .docx o el Excel, la web adopta ese cambio

@@ -1114,6 +1114,125 @@ async function api(req, res, url) {
     }
   }
 
+  // ---- exportar un libro anadido desde la web al Excel y a la carpeta de fotos
+  const mExportar = ruta.match(/^\/api\/libros\/([A-Za-z0-9_-]{1,40})\/exportar$/);
+  if (mExportar && metodo === 'POST') {
+    if (!estaLogueado(req)) return enviarError(res, 401, 'Hay que entrar como socio');
+    const id = mExportar[1];
+    const libro = buscarLibro(id);
+    if (!libro) return enviarError(res, 404, 'Libro no encontrado');
+    if (libro.origen !== 'nuevo') return enviarError(res, 400, 'Este libro ya esta en el listado');
+    if (!ajustes.origenExcel || !fs.existsSync(ajustes.origenExcel)) return enviarError(res, 400, 'No encuentro el Excel');
+    if (!ORIGEN || !fs.existsSync(ORIGEN)) return enviarError(res, 400, 'No encuentro la carpeta de libros');
+
+    const base = limpiarNombreArchivo(String(libro.titulo || '')
+      .replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '').toLowerCase());
+    if (!base) return enviarError(res, 400, 'El titulo no sirve para nombrar los archivos');
+    let choque = [];
+    try {
+      choque = fs.readdirSync(ORIGEN).filter((n) => {
+        const ln = n.toLowerCase();
+        return ln.startsWith(base + ' ') || ln.startsWith(base + '.');
+      });
+    } catch (e) { }
+    if (choque.length) {
+      return enviarError(res, 409, 'Ya hay archivos con ese nombre en la carpeta (' +
+        choque.slice(0, 3).join(', ') + '). Cambia el titulo o renombralos.');
+    }
+
+    const portada = (libro.portadas || [])[0] || '';
+    const contra = (libro.contraportadas || [])[0] || '';
+    const info = String(libro.infoArchivo || '');
+    const ext = (n) => path.extname(n).toLowerCase();
+    for (const n of [portada, contra]) {
+      if (n && ext(n) === '.webp') return enviarError(res, 400, 'La imagen .webp no se puede exportar; conviertela a jpg o png');
+    }
+
+    const datosPath = path.join(DATOS, 'exportar-libro.json');
+    escribirJson(datosPath, {
+      titulo: libro.titulo, autor: libro.autor, editorial: libro.editorial, signatura: libro.signatura,
+      estanteria: libro.estanteria, balda: libro.balda, estado: libro.estado || 'Disponible',
+      fechaEntrada: libro.fechaEntrada || new Date().toISOString().slice(0, 10),
+      fechaSalida: libro.fechaSalida || '', observaciones: libro.observaciones
+    });
+    ejecutarPowerShell('anadir-excel.ps1', ['-Datos', datosPath], (err, stdout) => {
+      try { fs.unlinkSync(datosPath); } catch (e) { }
+      if (err) {
+        registrar('No se ha podido exportar ' + id + ': ' + String(err.message || err).split('\n')[0]);
+        return enviarError(res, 500, 'No se ha podido escribir en el Excel (¿esta abierto?). Cierralo e intentalo de nuevo.');
+      }
+      const mFila = /FILA=(\d+)/.exec(String(stdout || ''));
+      if (!mFila) return enviarError(res, 500, 'El Excel no ha devuelto la fila nueva');
+      const fila = Number(mFila[1]);
+
+      const copiados = [];
+      try {
+        if (portada) {
+          const nom = base + ' 01' + ext(portada);
+          fs.copyFileSync(path.join(SUBIDAS, portada), path.join(ORIGEN, nom));
+          copiados.push({ origen: portada, destino: nom });
+        }
+        if (contra) {
+          const nom = base + ' 02' + ext(contra);
+          fs.copyFileSync(path.join(SUBIDAS, contra), path.join(ORIGEN, nom));
+          copiados.push({ origen: contra, destino: nom });
+        }
+        const rutaInfo = info ? path.join(SUBIDAS, info) : '';
+        if (rutaInfo && fs.existsSync(rutaInfo)) {
+          const nom = base + ' 03' + ext(info);
+          fs.copyFileSync(rutaInfo, path.join(ORIGEN, nom));
+          copiados.push({ origen: info, destino: nom });
+        } else if (libro.sinopsis || libro.paginas || libro.genero) {
+          const nom = base + ' 03.docx';
+          fs.writeFileSync(path.join(ORIGEN, nom), crearDocx({
+            titulo: libro.titulo, autor: libro.autor, editorial: libro.editorial,
+            paginas: libro.paginas, genero: libro.genero, sinopsis: libro.sinopsis, fechaPublicacion: ''
+          }));
+          copiados.push({ origen: '', destino: nom });
+        }
+      } catch (e) {
+        registrar('Aviso: fallo copiando los archivos de ' + id + ': ' + e.message);
+        return enviarError(res, 500, 'La fila del Excel se ha anadido, pero no se han podido copiar los archivos: ' + e.message);
+      }
+
+      // la ficha pasa a ser del listado: fuera de nuevos.json y cambios.json,
+      // y el historial apunta al id nuevo (r<fila>)
+      let nuevos = leerJson(NUEVOS_PATH, []);
+      nuevos = nuevos.filter((l) => l.id !== id);
+      escribirJson(NUEVOS_PATH, nuevos);
+      const cambios = leerJson(CAMBIOS_PATH, {});
+      delete cambios[id];
+      escribirJson(CAMBIOS_PATH, cambios);
+      const h = leerHistorial();
+      let tocados = 0;
+      for (const e of (h.cambios || [])) { if (e.id === id) { e.id = 'r' + fila; tocados++; } }
+      if (tocados) escribirJson(HISTORIAL_PATH, h);
+      for (const c of copiados) {
+        if (!c.origen) continue;
+        try { fs.unlinkSync(path.join(SUBIDAS, c.origen)); } catch (e) { }
+        try { fs.unlinkSync(path.join(MINIATURAS, c.origen + '.jpg')); } catch (e) { }
+      }
+      invalidarCatalogo();
+
+      const responder = (intentos) => {
+        const cat = cargarCatalogo();
+        const nuevo = cat.libros.find((l) => l.fila === fila) ||
+          cat.libros.find((l) => normalizar(l.titulo) === normalizar(libro.titulo));
+        if (!nuevo && intentos > 0) {
+          setTimeout(() => { invalidarCatalogo(); responder(intentos - 1); }, 1500);
+          return;
+        }
+        registrar('Libro exportado al listado: ' + libro.titulo + ' (fila ' + fila + ')');
+        return enviarJson(res, 200, {
+          ok: true, fila, libro: nuevo || null,
+          mensaje: 'Exportado al Excel (fila ' + fila + ') y a la carpeta de fotos'
+        });
+      };
+      actualizarCatalogo('libro exportado al listado', () => { invalidarCatalogo(); responder(12); });
+    });
+    return;
+  }
+
   // ---- medios de un libro (subir / borrar)
   const mMedia = ruta.match(/^\/api\/libros\/([A-Za-z0-9_-]{1,40})\/media$/);
   if (mMedia) {

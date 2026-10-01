@@ -265,6 +265,8 @@
               <label class="boton boton-contorno">Subir info (.docx, .txt, .pdf)
                 <input type="file" accept=".docx,.doc,.txt,.md,.pdf,application/pdf" data-subir="info" hidden></label>
               <button class="boton boton-contorno" id="btnEditarFicha">Editar ficha</button>
+              ${l.origen === 'nuevo' ? `<button class="boton boton-contorno" id="btnExportarLibro"
+                title="Anade su fila al Excel y copia a la carpeta la portada, la contraportada y el documento">Exportar al listado</button>` : ''}
             </div>
             <div id="editorFicha" hidden></div>
           </div>
@@ -946,6 +948,19 @@
       if (e.target.closest('#btnCancelarEdicion')) {
         $('#editorFicha').hidden = true; $('#editorFicha').innerHTML = '';
         $('#btnEditarFicha').hidden = false;
+        return;
+      }
+      if (e.target.closest('#btnExportarLibro')) {
+        const boton = e.target.closest('#btnExportarLibro');
+        if (!confirm('Se añadirá «' + l.titulo + '» al Excel y sus archivos (portada, contraportada y documento) a la carpeta de fotos con el nombre estándar. ¿Continuar?')) return;
+        boton.disabled = true;
+        try {
+          const res = await api('/api/libros/' + encodeURIComponent(l.id) + '/exportar', { method: 'POST' });
+          toast(res.mensaje || 'Libro exportado al listado');
+          cerrarDetalle();
+          await cargarLibros();
+          if (res.libro && res.libro.id) abrirDetalle(res.libro.id);
+        } catch (err) { toast(err.message, true); boton.disabled = false; }
         return;
       }
       if (e.target.closest('#btnBorrarLibro')) {
