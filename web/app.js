@@ -11,7 +11,7 @@
   const estado = {
     libros: [],
     sesion: { logueado: false, usuario: '', clavePorDefecto: false },
-    filtros: { texto: '', estado: '', signatura: '', orden: 'titulo', soloPortada: false, porCompletar: false },
+    filtros: { texto: '', estado: '', signatura: '', editorial: '', orden: 'titulo', soloPortada: false, porCompletar: false },
     visibles: LOTE,
     detalleId: null,
     imagenActiva: 0,
@@ -103,6 +103,7 @@
     let lista = estado.libros.filter((l) => {
       if (f.estado && (l.estado || '') !== f.estado) return false;
       if (f.signatura && (l.signatura || '') !== f.signatura) return false;
+      if (f.editorial && (l.editorial || '') !== f.editorial) return false;
       if (f.soloPortada && !(l.portadas && l.portadas.length)) return false;
       if (f.porCompletar && l.origen !== 'carpeta') return false;
       if (palabras.length) {
@@ -115,6 +116,8 @@
     const cmp = {
       titulo: (a, b) => claveTitulo(a.titulo).localeCompare(claveTitulo(b.titulo), 'es'),
       autor: (a, b) => String(a.autor || 'zzz').localeCompare(String(b.autor || 'zzz'), 'es'),
+      editorial: (a, b) => String(a.editorial || 'zzz').localeCompare(String(b.editorial || 'zzz'), 'es') ||
+        claveTitulo(a.titulo).localeCompare(claveTitulo(b.titulo), 'es'),
       estanteria: (a, b) => claveEstante(a).localeCompare(claveEstante(b), 'es'),
       listado: () => 0,
       recientes: (a, b) => String(b.creado || b.fechaEntrada || '').localeCompare(String(a.creado || a.fechaEntrada || ''))
@@ -162,15 +165,27 @@
 
   function pintarFiltrosCategoria() {
     const conteo = new Map();
+    const editoriales = new Map();
     for (const l of estado.libros) {
       const s = l.signatura || '';
-      if (!s) continue;
-      conteo.set(s, (conteo.get(s) || 0) + 1);
+      if (s) conteo.set(s, (conteo.get(s) || 0) + 1);
+      const e = l.editorial || '';
+      if (e) editoriales.set(e, (editoriales.get(e) || 0) + 1);
     }
     const opciones = Array.from(conteo.entries()).sort((a, b) => b[1] - a[1]);
-    $('#selSignatura').innerHTML = '<option value="">Todas las categorías</option>' +
+    const selSig = $('#selSignatura');
+    const sigElegida = selSig.value;
+    selSig.innerHTML = '<option value="">Todas las categorías</option>' +
       opciones.map(([s, n]) => `<option value="${escap(s)}">${escap(s)} (${n})</option>`).join('');
+    if (opciones.some(([s]) => s === sigElegida)) selSig.value = sigElegida;
     $('#listaSignaturas').innerHTML = opciones.map(([s]) => `<option value="${escap(s)}">`).join('');
+
+    const eds = Array.from(editoriales.entries()).sort((a, b) => a[0].localeCompare(b[0], 'es'));
+    const selEd = $('#selEditorial');
+    const edElegida = selEd.value;
+    selEd.innerHTML = '<option value="">Todas las editoriales</option>' +
+      eds.map(([e, n]) => `<option value="${escap(e)}">${escap(e)} (${n})</option>`).join('');
+    if (eds.some(([e]) => e === edElegida)) selEd.value = edElegida;
   }
 
   /* ------------------------------------------------------------ detalle */
@@ -886,6 +901,7 @@
       pintar(true);
     }));
     $('#selSignatura').addEventListener('change', (e) => { estado.filtros.signatura = e.target.value; pintar(true); });
+    $('#selEditorial').addEventListener('change', (e) => { estado.filtros.editorial = e.target.value; pintar(true); });
     $('#selOrden').addEventListener('change', (e) => { estado.filtros.orden = e.target.value; pintar(true); });
     $('#chkPortada').addEventListener('change', (e) => { estado.filtros.soloPortada = e.target.checked; pintar(true); });
     $('#btnMas').addEventListener('click', () => { estado.visibles += LOTE; pintar(false); });

@@ -718,7 +718,6 @@ body.socio .solo-socios-detalle { display: block; }
 
 @media (max-width: 420px) {
   .rejilla { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .filtros-secundarios { grid-template-columns: minmax(0, 1fr); }
   .detalle-imagenes { max-width: 200px; }
   .detalle-acciones { grid-template-columns: 1fr; }
   .portada-lema br { display: none; }
