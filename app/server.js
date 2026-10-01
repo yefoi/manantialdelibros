@@ -535,13 +535,21 @@ function limpiarNombreArchivo(s) {
   return String(s == null ? '' : s).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
 }
 function baseDeArchivo(libro) {
+  // si ya tiene una portada de la carpeta, el documento sigue su nombre;
+  // las portadas subidas desde la web (id-...) se ignoran para el nombre
   const portada = (libro.portadas || [])[0] || '';
-  if (portada) {
+  if (portada && !(libro.id && portada.startsWith(libro.id + '-'))) {
     const base = portada.replace(/\.[a-z0-9]+$/i, '').replace(/\s+\d{1,2}[a-z]?$/i, '').trim();
     if (base) return base;
   }
-  const t = String(libro.titulo || 'libro').replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
-  return limpiarNombreArchivo(t.toLowerCase()) || 'libro';
+  // convencion del listado: el articulo va al final ("jardinero fiel, el")
+  let t = normalizarCampo(libro.titulo);
+  let articulo = '';
+  const m = t.match(/^(el|la|los|las|un|una|unos|unas)\s+(.+)$/i);
+  if (m) { articulo = m[1].toLowerCase(); t = m[2]; }
+  t = limpiarNombreArchivo(t.toLowerCase());
+  if (!t) return '';
+  return articulo ? (t + ', ' + articulo) : t;
 }
 function normalizarCampo(v) {
   return String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
@@ -569,7 +577,7 @@ function sincronizarDocx(libro) {
   } else if (info && !info.toLowerCase().endsWith('.docx')) {
     return null;   // pdf/txt de origen: no se tocan
   } else if (ORIGEN && fs.existsSync(ORIGEN) && libro.origen !== 'nuevo' && libro.origen !== 'huerfano') {
-    nombre = limpiarNombreArchivo(baseDeArchivo(libro) + ' 03.docx');
+    nombre = limpiarNombreArchivo((baseDeArchivo(libro) || 'libro') + ' 03.docx');
     destino = path.join(ORIGEN, nombre);
   } else {
     nombre = libro.id + '-info-' + Date.now().toString(36) + '.docx';
@@ -1131,8 +1139,7 @@ async function api(req, res, url) {
     if (!ajustes.origenExcel || !fs.existsSync(ajustes.origenExcel)) return enviarError(res, 400, 'No encuentro el Excel');
     if (!ORIGEN || !fs.existsSync(ORIGEN)) return enviarError(res, 400, 'No encuentro la carpeta de libros');
 
-    const base = limpiarNombreArchivo(String(libro.titulo || '')
-      .replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '').toLowerCase());
+    const base = baseDeArchivo(libro);
     if (!base) return enviarError(res, 400, 'El titulo no sirve para nombrar los archivos');
     let choque = [];
     try {
