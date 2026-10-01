@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Manantial de Libros · Biblioteca</title>
 <meta name="description" content="Biblioteca comunitaria Manantial de Libros: consulta qué libros están disponibles, prestados o donados.">
 <meta name="theme-color" content="#F6F2EA">
@@ -27,7 +27,10 @@
       </svg>
       <span class="fundacion-texto"><small>Fundación</small><strong>Manantial</strong></span>
     </a>
-    <nav class="cabecera-acciones">
+    <button class="menu-boton" id="btnMenu" aria-label="Abrir menú" aria-expanded="false" aria-controls="cabeceraAcciones">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+    <nav class="cabecera-acciones" id="cabeceraAcciones">
       <button class="boton boton-fantasma" id="btnMapa">Estanterías</button>
       <button class="boton boton-fantasma solo-socios" id="btnRevision" hidden>Revisión</button>
       <button class="boton boton-fantasma solo-socios" id="btnHistorial" hidden>Historial</button>

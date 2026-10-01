@@ -1233,6 +1233,28 @@
       } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     });
 
+    // menú de la cabecera en móvil
+    (function () {
+      const cabecera = $('.cabecera');
+      const boton = $('#btnMenu');
+      const nav = $('#cabeceraAcciones');
+      if (!cabecera || !boton || !nav) return;
+      const cerrarMenu = () => { cabecera.classList.remove('menu-abierto'); boton.setAttribute('aria-expanded', 'false'); };
+      boton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const abierto = cabecera.classList.toggle('menu-abierto');
+        boton.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+      });
+      nav.addEventListener('click', (e) => { if (e.target.closest('.boton')) cerrarMenu(); });
+      document.addEventListener('click', (e) => {
+        if (!cabecera.classList.contains('menu-abierto')) return;
+        if (e.target.closest('#cabeceraAcciones') || e.target.closest('#btnMenu')) return;
+        cerrarMenu();
+      });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarMenu(); });
+      window.addEventListener('resize', () => { if (window.innerWidth > 720) cerrarMenu(); });
+    })();
+
     $$('[data-cerrar]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
     $$('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
     document.addEventListener('keydown', (e) => {
