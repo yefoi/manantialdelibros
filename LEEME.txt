@@ -161,9 +161,9 @@ biblioteca, pon el filtro de estado en "Disponible". La propia pantalla
 te avisa de cuántos de cada lista están donados.
 
 El botón "Descargar lista (CSV)" guarda en un archivo la lista que estés
-viendo (con título, autor, editorial, categoría, estantería, balda y
-estado). Se abre con Excel y es perfecta para imprimir y llevarla a las
-estanterías.
+viendo (con título, autor, editorial, categoría, estantería, balda,
+estado y observaciones). Se abre con Excel y es perfecta para imprimir
+y llevarla a las estanterías.
 
 Qué cuenta como "nuevo" o "desaparecido": se compara el título y el
 autor (sin contar el artículo), no el número de fila, así que insertar

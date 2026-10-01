@@ -30,6 +30,10 @@
 
   const sinArticulo = (t) => String(t || '').replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
   const claveTitulo = (t) => norm(sinArticulo(t));
+  // para ordenar por estantería: "0", "1"… y los que no tienen, al final
+  const claveEstante = (l) => l.estanteria
+    ? String(l.estanteria).padStart(4, '0') + '·' + String(l.balda || '')
+    : 'zzzz';
   const urlMedia = (tipo, nombre) => '/media/' + tipo + '/' + encodeURIComponent(nombre) +
     (estado.version ? '?v=' + encodeURIComponent(estado.version) : '');
   const img = (nombre) => urlMedia('thumb', nombre === undefined ? '' : nombre);
@@ -63,7 +67,7 @@
   function tarjetaHTML(l) {
     const portada = (l.portadas && l.portadas.length) ? l.portadas[0] : null;
     const claseInsignia = 'insignia insignia-' + (l.estado || 'vacia');
-    const pie = [l.signatura, l.estanteria ? ubicacion(l).replace('Estantería ', 'Est. ') : '']
+    const pie = [l.signatura, l.estanteria ? ubicacion(l).replace('Estantería ', 'Est. ') : '', l.observaciones || '']
       .filter(Boolean).join(' · ');
     return `
       <button class="tarjeta" data-id="${escap(l.id)}" type="button">
@@ -104,6 +108,7 @@
     const cmp = {
       titulo: (a, b) => claveTitulo(a.titulo).localeCompare(claveTitulo(b.titulo), 'es'),
       autor: (a, b) => String(a.autor || 'zzz').localeCompare(String(b.autor || 'zzz'), 'es'),
+      estanteria: (a, b) => claveEstante(a).localeCompare(claveEstante(b), 'es'),
       listado: () => 0,
       recientes: (a, b) => String(b.creado || b.fechaEntrada || '').localeCompare(String(a.creado || a.fechaEntrada || ''))
     }[f.orden];
@@ -234,7 +239,10 @@
 
           ${meta.length ? `<dl class="detalle-meta">${meta.map(([k, v]) => `<div><dt>${escap(k)}</dt><dd>${escap(v)}</dd></div>`).join('')}</dl>` : ''}
           ${l.sinopsis ? `<p class="detalle-sinopsis">${escap(l.sinopsis)}</p>` : '<p class="detalle-sinopsis nota">Sin sinopsis todavía.</p>'}
-          ${l.observaciones ? `<p class="detalle-observaciones">${escap(l.observaciones)}</p>` : ''}
+          <div class="detalle-seccion">
+            <h3>Observaciones</h3>
+            <p class="detalle-observaciones ${l.observaciones ? '' : 'vacia'}">${l.observaciones ? escap(l.observaciones) : 'Sin observaciones'}</p>
+          </div>
           ${l.infoArchivo ? `<a class="enlace-doc" href="${urlMedia('doc', l.infoArchivo)}" target="_blank" rel="noopener">Ver la ficha original (${escap(l.infoArchivo)})</a>` : ''}
 
           <div class="detalle-seccion solo-socios-detalle">
@@ -468,7 +476,7 @@
       return '<' + etiqueta + ' class="revision-fila ' + (l.id ? 'pulsable' : '') + '" ' +
         (l.id ? 'type="button" data-id="' + escap(l.id) + '"' : '') + '>' +
         '<span class="texto"><span class="titulo">' + escap(l.titulo || '') + '</span>' +
-        '<span class="sub">' + escap([l.autor, l.editorial].filter(Boolean).join(' · ')) + '</span></span>' +
+        '<span class="sub">' + escap([l.autor, l.editorial, l.observaciones].filter(Boolean).join(' · ')) + '</span></span>' +
         '<span class="donde">' + escap(donde) + '</span></' + etiqueta + '>';
     }).join('') : '<p class="revision-vacio">No hay libros en esta lista.</p>';
   }
@@ -482,8 +490,8 @@
 
   function descargarRevisionCsv() {
     const lista = revisionLista();
-    const cabecera = ['Titulo', 'Autor', 'Editorial', 'Categoria', 'Estanteria', 'Balda', 'Estado'];
-    const filas = lista.map((l) => [l.titulo, l.autor, l.editorial, l.signatura, l.estanteria, l.balda, l.estado]
+    const cabecera = ['Titulo', 'Autor', 'Editorial', 'Categoria', 'Estanteria', 'Balda', 'Estado', 'Observaciones'];
+    const filas = lista.map((l) => [l.titulo, l.autor, l.editorial, l.signatura, l.estanteria, l.balda, l.estado, l.observaciones]
       .map((v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(';'));
     const texto = '\uFEFF' + cabecera.join(';') + '\r\n' + filas.join('\r\n');
     const blob = new Blob([texto], { type: 'text/csv;charset=utf-8' });
