@@ -843,6 +843,45 @@ async function api(req, res, url) {
     } else {
       guardarCambio(e.id, e.antes);
       libro = buscarLibro(e.id);
+      if (libro && e.accion === 'media' && e.antes) {
+        // deshacer un cambio de imagen: los archivos nuevos se apartan a
+        // datos/reemplazos y los antiguos se devuelven a su sitio
+        const reemplazos = path.join(DATOS, 'reemplazos');
+        try { fs.mkdirSync(reemplazos, { recursive: true }); } catch (err) { }
+        const esSubida = (n) => new RegExp('^' + libro.id + '-(portada|contraportada|info)-').test(n);
+        const apartar = (n) => {
+          for (const dir of [SUBIDAS, ORIGEN]) {
+            try {
+              const p = path.join(dir, n);
+              if (fs.existsSync(p)) {
+                try { fs.unlinkSync(path.join(reemplazos, n)); } catch (err) { }
+                fs.renameSync(p, path.join(reemplazos, n));
+                try { fs.unlinkSync(path.join(MINIATURAS, n + '.jpg')); } catch (err) { }
+                break;
+              }
+            } catch (err) { }
+          }
+        };
+        const antiguos = [];
+        const nuevos = [];
+        for (const campo of ['portadas', 'contraportadas']) {
+          for (const n of (Array.isArray(e.antes[campo]) ? e.antes[campo] : [])) if (n) antiguos.push(n);
+          for (const n of (Array.isArray(e.despues && e.despues[campo]) ? e.despues[campo] : [])) if (n) nuevos.push(n);
+        }
+        if (e.antes.infoArchivo) antiguos.push(e.antes.infoArchivo);
+        if (e.despues && e.despues.infoArchivo) nuevos.push(e.despues.infoArchivo);
+        for (const n of nuevos) { if (!antiguos.includes(n)) apartar(n); }
+        for (const n of antiguos) {
+          try {
+            const p = path.join(reemplazos, n);
+            if (!fs.existsSync(p)) continue;
+            const destino = path.join(esSubida(n) ? SUBIDAS : ORIGEN, n);
+            try { if (fs.existsSync(destino)) fs.unlinkSync(destino); } catch (err) { }
+            fs.renameSync(p, destino);
+            setTimeout(() => generarMiniatura(n), 200);
+          } catch (err) { }
+        }
+      }
       if (libro && e.accion === 'ficha') {
         // la ficha restaurada se devuelve tambien al .docx
         const hecho = sincronizarDocx(libro);
@@ -1267,12 +1306,11 @@ async function api(req, res, url) {
       const permitidos = tipoTxt === 'info' ? ['.docx', '.doc', '.txt', '.md', '.pdf'] : ['.jpg', '.jpeg', '.png', '.webp'];
       if (!permitidos.includes(ext)) return enviarError(res, 400, 'Formato no permitido (' + permitidos.join(', ') + ')');
 
-      const nombre = id + '-' + tipoTxt + '-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex') + ext;
-      fs.writeFileSync(path.join(SUBIDAS, nombre), archivo.datos);
       const campos = {};
-      const campo = tipoTxt === 'portada' ? 'portadas' : tipoTxt === 'contraportada' ? 'contraportadas' : 'infoArchivo';
-
+      let nombre = '';
       if (tipoTxt === 'info') {
+        nombre = id + '-info-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex') + ext;
+        fs.writeFileSync(path.join(SUBIDAS, nombre), archivo.datos);
         campos.infoArchivo = nombre;
         if (ext === '.docx') {
           try {
@@ -1287,9 +1325,45 @@ async function api(req, res, url) {
           campos.sinopsis = archivo.datos.toString('utf8').replace(/\s+/g, ' ').trim().slice(0, 8000);
         }
       } else {
-        const lista = Array.isArray(libro[campo]) ? libro[campo].slice() : [];
-        lista.unshift(nombre);
-        campos[campo] = lista;
+        // la portada/contraportada se CAMBIA (no se acumula) y, en libros del
+        // listado o creados desde archivos, se guarda en libros FINAL con el
+        // nombre estandar (mismo que la imagen que reemplaza, o "titulo 01/02")
+        const campo = tipoTxt === 'portada' ? 'portadas' : 'contraportadas';
+        const deFuente = !!(libro.fila || libro.origen === 'listado' || libro.origen === 'carpeta');
+        const antigua = (Array.isArray(libro[campo]) ? libro[campo] : [])[0] || '';
+        let destino = '';
+        if (deFuente && ORIGEN && fs.existsSync(ORIGEN)) {
+          const rutaAntigua = antigua ? path.join(ORIGEN, antigua) : '';
+          if (rutaAntigua && fs.existsSync(rutaAntigua)) {
+            nombre = limpiarNombreArchivo(antigua.replace(/\.[a-z0-9]+$/i, '') + ext);
+          } else {
+            nombre = limpiarNombreArchivo((baseDeArchivo(libro) || 'libro') + (tipoTxt === 'portada' ? ' 01' : ' 02') + ext);
+          }
+          destino = path.join(ORIGEN, nombre);
+        } else {
+          nombre = id + '-' + tipoTxt + '-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex') + ext;
+          destino = path.join(SUBIDAS, nombre);
+        }
+        // las imagenes anteriores de esa cara se guardan en datos/reemplazos
+        // (no se pierden, por si se deshace el cambio)
+        const reemplazos = path.join(DATOS, 'reemplazos');
+        try { fs.mkdirSync(reemplazos, { recursive: true }); } catch (e) { }
+        for (const viejo of (Array.isArray(libro[campo]) ? libro[campo] : [])) {
+          if (!viejo) continue;
+          for (const dir of [SUBIDAS, ORIGEN]) {
+            try {
+              const p = path.join(dir, viejo);
+              if (fs.existsSync(p)) {
+                try { fs.unlinkSync(path.join(reemplazos, viejo)); } catch (e2) { }
+                fs.renameSync(p, path.join(reemplazos, viejo));
+                try { fs.unlinkSync(path.join(MINIATURAS, viejo + '.jpg')); } catch (e2) { }
+                break;
+              }
+            } catch (e2) { }
+          }
+        }
+        fs.writeFileSync(destino, archivo.datos);
+        campos[campo] = [nombre];
         setTimeout(() => generarMiniatura(nombre), 200);
       }
       const antes = camposAntesDe(libro, campos);

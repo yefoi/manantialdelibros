@@ -278,11 +278,11 @@
           <div class="detalle-seccion solo-socios-detalle">
             <h3>Portadas e información</h3>
             <div class="detalle-acciones">
-              <label class="boton boton-contorno">Cambiar portada
+              <label class="boton boton-contorno">${(l.portadas && l.portadas.length) ? 'Cambiar portada' : 'Añadir portada'}
                 <input type="file" accept="image/*" data-subir="portada" hidden></label>
-              <label class="boton boton-contorno">Añadir contraportada
+              <label class="boton boton-contorno">${(l.contraportadas && l.contraportadas.length) ? 'Cambiar contraportada' : 'Añadir contraportada'}
                 <input type="file" accept="image/*" data-subir="contraportada" hidden></label>
-              <label class="boton boton-contorno">Subir info (.docx, .txt, .pdf)
+              <label class="boton boton-contorno">${l.infoArchivo ? 'Cambiar info (.docx, .txt, .pdf)' : 'Subir info (.docx, .txt, .pdf)'}
                 <input type="file" accept=".docx,.doc,.txt,.md,.pdf,application/pdf" data-subir="info" hidden></label>
               <button class="boton boton-contorno" id="btnEditarFicha">Editar ficha</button>
               ${l.origen === 'nuevo' ? `<button class="boton boton-contorno" id="btnExportarLibro"
