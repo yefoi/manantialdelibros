@@ -11,12 +11,40 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+Add-Type -AssemblyName System.IO.Compression
 
 $Raiz = Split-Path -Parent $PSScriptRoot
 if (-not $Ajustes) { $Ajustes = Join-Path $Raiz 'datos\ajustes.json' }
 
+# ------------------------------------------------- cache de los .docx leidos
+# Guarda lo extraido de cada .docx (sinopsis, paginas, editorial...) para no
+# volver a abrirlos si no han cambiado. Acelera mucho la importacion.
+$script:cacheDocxPath = Join-Path $Raiz 'datos\cache-docx.json'
+$script:cacheDocx = @{}
+if (Test-Path $script:cacheDocxPath) {
+  try {
+    $guardado = Get-Content $script:cacheDocxPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($prop in $guardado.PSObject.Properties) { $script:cacheDocx[$prop.Name] = $prop.Value }
+  } catch { $script:cacheDocx = @{} }
+}
+
 # ---------------------------------------------------------------- utilidades
 function Escribir([string]$msg) { if (-not $Silencioso) { Write-Host $msg } }
+
+# Abre un archivo comprimido (xlsx, docx) en modo lectura permitiendo que otro
+# programa (Excel, Word) lo tenga abierto a la vez. Sin esto, el importador
+# fallaba con "el archivo esta siendo utilizado en otro proceso" y la web no
+# se actualizaba hasta cerrar el Excel.
+function AbrirZip([string]$ruta) {
+  $flujo = New-Object System.IO.FileStream($ruta, [System.IO.FileMode]::Open,
+    [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+  try {
+    return New-Object System.IO.Compression.ZipArchive($flujo, [System.IO.Compression.ZipArchiveMode]::Read)
+  } catch {
+    $flujo.Dispose()
+    throw
+  }
+}
 
 # avisos del diagnostico de nombres y archivos (solo informativos)
 function Nuevo-Aviso([string]$id, [string]$nombre, [string]$detalle, $items) {
@@ -30,11 +58,10 @@ function Item-Aviso([string]$texto, [string]$detalle, [string]$id) {
 function Normalizar([string]$s) {
   if ($null -eq $s) { return '' }
   $t = $s.Normalize([Text.NormalizationForm]::FormD)
-  $sb = New-Object Text.StringBuilder
-  foreach ($ch in $t.ToCharArray()) {
-    if ([Globalization.CharUnicodeInfo]::GetUnicodeCategory($ch) -ne [Globalization.UnicodeCategory]::NonSpacingMark) { [void]$sb.Append($ch) }
-  }
-  $t = $sb.ToString().Normalize([Text.NormalizationForm]::FormC).ToUpperInvariant()
+  # quitar los acentos con una expresion regular es mucho mas rapido que
+  # recorrer el texto letra a letra (esta funcion se usa miles de veces)
+  $t = [regex]::Replace($t, '\p{Mn}', '')
+  $t = $t.Normalize([Text.NormalizationForm]::FormC).ToUpperInvariant()
   $t = [regex]::Replace($t, '[^A-Z0-9 ]+', ' ')
   $t = [regex]::Replace($t, '\s+', ' ').Trim()
   return $t
@@ -81,7 +108,15 @@ function ArreglarTitulo([string]$titulo, [string]$archivo) {  # El listado del E
 }
 
 function LeerDocx([string]$ruta, [string]$nombreArchivo) {
-  $zip = [System.IO.Compression.ZipFile]::OpenRead($ruta)
+  # cache: si el .docx no ha cambiado desde la ultima importacion se reutiliza
+  # lo ya leido (leer 750 .docx es lo que hacia lenta la importacion)
+  $claveCache = ''
+  try {
+    $fi = Get-Item -LiteralPath $ruta
+    $claveCache = "$nombreArchivo|$($fi.Length)|$($fi.LastWriteTimeUtc.Ticks)"
+    if ($script:cacheDocx.ContainsKey($claveCache)) { return $script:cacheDocx[$claveCache] }
+  } catch { $claveCache = '' }
+  $zip = AbrirZip $ruta
   try {
     $e = $zip.Entries | Where-Object { $_.FullName -eq 'word/document.xml' }
     if (-not $e) { return $null }
@@ -123,12 +158,14 @@ function LeerDocx([string]$ruta, [string]$nombreArchivo) {
     }
     if ($actual -and $linea.Trim()) { $campos[$actual] = ($campos[$actual] + ' ' + $linea.Trim()).Trim() }
   }
-  return [pscustomobject]@{
+  $resultado = [pscustomobject]@{
     Archivo = $nombreArchivo
     Titulo = $campos.titulo; Autor = $campos.autor; Paginas = $campos.paginas
     Editorial = $campos.editorial; Sinopsis = $campos.sinopsis; Genero = $campos.genero
     FechaPublicacion = $campos.fechaPublicacion
   }
+  if ($claveCache) { $script:cacheDocx[$claveCache] = $resultado }
+  return $resultado
 }
 
 # ---------------------------------------------------------------- ajustes
@@ -151,7 +188,7 @@ if (-not (Test-Path $OrigenLibros)) { throw "No encuentro la carpeta de libros: 
 
 # ---------------------------------------------------------------- Excel
 Escribir "Leyendo Excel..."
-$zip = [System.IO.Compression.ZipFile]::OpenRead($OrigenExcel)
+$zip = AbrirZip $OrigenExcel
 try {
   $shared = @{}
   $se = $zip.Entries | Where-Object { $_.FullName -eq 'xl/sharedStrings.xml' }
@@ -543,6 +580,13 @@ foreach ($l in $libros) {
 
 $sugerencias = New-Object Collections.ArrayList
 $ambiguos = 0
+# para que dos titulos se parezcan un 86% sus longitudes no pueden llevarse
+# mucho: con este descarte se evita calcular la distancia de miles de parejas
+# (era lo que hacia que la importacion tardase mas de un minuto)
+function DescartePorLongitud([string]$a, [string]$b) {
+  $largo = [Math]::Max($a.Length, $b.Length)
+  return ([Math]::Abs($a.Length - $b.Length) -gt [Math]::Max(2, [int]($largo * 0.15)))
+}
 foreach ($entrada in ($gruposLibres.Values | Sort-Object { $_.Clave })) {
   $k = $entrada.Clave
   $letra0 = $k.Substring(0, 1)
@@ -550,6 +594,7 @@ foreach ($entrada in ($gruposLibres.Values | Sort-Object { $_.Clave })) {
   if ($librosLibres.ContainsKey($letra0)) { $candidatos = $librosLibres[$letra0] }
   $mejor = $null; $mejorPunt = 0.0
   foreach ($cand in $candidatos) {
+    if (DescartePorLongitud $k $cand.Clave) { continue }
     $p = Similitud $k $cand.Clave
     if ($p -gt $mejorPunt) { $mejorPunt = $p; $mejor = $cand }
   }
@@ -557,6 +602,7 @@ foreach ($entrada in ($gruposLibres.Values | Sort-Object { $_.Clave })) {
     $otro = $null; $segundoPunt = 0.0
     foreach ($cand in $candidatos) {
       if ($cand -eq $mejor) { continue }
+      if (DescartePorLongitud $k $cand.Clave) { continue }
       $p = Similitud $k $cand.Clave
       if ($p -gt $segundoPunt) { $segundoPunt = $p; $otro = $cand }
     }
@@ -992,6 +1038,20 @@ foreach ($g in ($libros | Group-Object estado)) { $stats.porEstado[$g.Name] = $g
 foreach ($g in ($libros | Group-Object signatura)) { $stats.porSignatura[$g.Name] = $g.Count }
 $statsJson = $stats | ConvertTo-Json -Depth 4 -Compress
 [IO.File]::WriteAllText((Join-Path $Raiz 'datos\estadisticas.json'), $statsJson, (New-Object Text.UTF8Encoding $false))
+
+# guardar el cache de .docx (solo de los que siguen existiendo)
+try {
+  $nombresDocx = @{}
+  foreach ($a in $archivos) { if ($a.Extension.ToLower() -eq '.docx') { $nombresDocx[$a.Name] = $true } }
+  $paraGuardar = [ordered]@{}
+  foreach ($clave in $script:cacheDocx.Keys) {
+    $nom = ($clave -split '\|')[0]
+    if ($nombresDocx.ContainsKey($nom)) { $paraGuardar[$clave] = $script:cacheDocx[$clave] }
+  }
+  $tmpCache = "$($script:cacheDocxPath).tmp"
+  [IO.File]::WriteAllText($tmpCache, ($paraGuardar | ConvertTo-Json -Depth 4 -Compress), (New-Object Text.UTF8Encoding $false))
+  Move-Item -Force $tmpCache $script:cacheDocxPath
+} catch { Escribir ("  (aviso: no se ha podido guardar el cache de docx: {0})" -f $_.Exception.Message) }
 
 # resumen final
 Escribir ("Archivos sin asignar: {0}  (ver datos\revision.txt)" -f $resto.Count)

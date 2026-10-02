@@ -210,6 +210,11 @@ a "Donado"), para que el listado no se quede desfasado:
      Excel, la web lo adopta en la siguiente importación. Gana siempre el
      último cambio, venga de la web o del Excel
 
+Mientras el Excel esté abierto se puede seguir consultando la web con
+normalidad, y si lo cambias y lo guardas la web lo detecta, lo lee (aunque
+esté abierto) y se actualiza sola en menos de un minuto. Los navegadores
+que estén abiertos se refrescan solos, sin hacer nada.
+
 
 Notas
 -----

@@ -852,15 +852,27 @@
     try { s = await api('/api/estado'); } catch (e) { return; }
     estado.actualizando = !!s.actualizando;
     if (s.actualizando) {
-      $('#avisoCatalogoTexto').textContent = 'Actualizando el catálogo… puede tardar un minuto';
+      $('#avisoCatalogoTexto').textContent = 'Actualizando el catálogo… los cambios del Excel tardan un poco en aparecer';
       $('#btnActualizarVista').hidden = true;
       caja.hidden = false;
       return;
     }
     if (s.version && estado.version && s.version !== estado.version && estado.libros.length) {
-      $('#avisoCatalogoTexto').textContent = 'El catálogo se ha actualizado';
-      $('#btnActualizarVista').hidden = false;
-      caja.hidden = false;
+      // si no hay nada abierto ni una búsqueda a medias, se refresca solo
+      const ocupado = $('#panelDetalle').open || $('#panelRevision').open || $('#panelAjustes').open ||
+        $('#panelNuevo').open || $('#panelExplorar').open || $('#campoBuscar').value.trim() !== '';
+      if (!ocupado) {
+        try {
+          await cargarLibros();
+          if (estado.detalleId) pintarDetalle();
+          toast('Catálogo actualizado');
+        } catch (e) { /* se reintentara en la siguiente revision */ }
+        caja.hidden = true;
+      } else {
+        $('#avisoCatalogoTexto').textContent = 'El catálogo se ha actualizado';
+        $('#btnActualizarVista').hidden = false;
+        caja.hidden = false;
+      }
     } else {
       caja.hidden = true;
     }

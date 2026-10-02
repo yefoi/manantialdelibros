@@ -9,6 +9,7 @@ En esta carpeta vive todo lo que el sitio guarda en este ordenador.
   · miniaturas/      copias pequeñas de las portadas, para que cargue rápido
   · revision.txt     avisos de la última importación (para revisar a mano)
   · novedades.json   libros nuevos y desaparecidos respecto a la importación anterior
+  · cache-docx.json  lo leído de los .docx (acelera las siguientes importaciones)
   · diagnostico.json avisos sobre nombres y asignación de los archivos de fotos
   · historial.json   cambios hechos desde el sitio (quién, qué y cuándo), para deshacer
   · asociaciones.json qué archivos pertenecen a cada libro (aunque cambie el título)
