@@ -1409,6 +1409,7 @@ let importando = false;
 let importacionPendiente = false;
 let firmaConocidaTexto = '';
 let temporizadorCambios = null;
+let reintentoImportacion = null;   // si la importacion falla (Excel ocupado), se reintenta
 
 function firmaArchivo(ruta) {
   try { const s = fs.statSync(ruta); return s.size + '/' + Math.round(s.mtimeMs); } catch (e) { return '0/0'; }
@@ -1441,16 +1442,26 @@ function actualizarCatalogo(motivo, cb) {
   const t0 = Date.now();
   ultimaImportacion = { inicio: new Date().toISOString(), fin: '', ok: null, motivo, error: '', total: ultimaImportacion.total || 0 };
   registrar('*** Cambios detectados (' + motivo + '): reimportando el catalogo... ***');
-  ejecutarPowerShell('importar.ps1', [], (errI) => {
+  ejecutarPowerShell('importar.ps1', [], (errI, salidaI, errorI) => {
     if (errI) {
       ultimaImportacion.fin = new Date().toISOString();
       ultimaImportacion.ok = false;
       ultimaImportacion.error = String(errI.message || errI).split('\n')[0];
-      registrar('ERROR al reimportar: ' + ultimaImportacion.error);
+      const colaError = String(errorI || '').trim().split('\n').map(l => l.trim()).filter(Boolean).slice(-3).join(' | ');
+      registrar('ERROR al reimportar: ' + ultimaImportacion.error + (colaError ? '  ->  ' + colaError : ''));
       importando = false;
+      // suele pasar cuando el Excel esta abierto o a medio guardar: se reintenta
+      if (!reintentoImportacion) {
+        registrar('Se reintentara la importacion en 90 segundos...');
+        reintentoImportacion = setTimeout(() => {
+          reintentoImportacion = null;
+          actualizarCatalogo('reintento tras error');
+        }, 90000);
+      }
       if (cb) cb(errI);
       return;
     }
+    if (reintentoImportacion) { clearTimeout(reintentoImportacion); reintentoImportacion = null; }
     registrar('Catalogo reimportado en ' + Math.round((Date.now() - t0) / 1000) + ' s. Generando miniaturas...');
     ejecutarPowerShell('miniaturas.ps1', [], (errM) => {
       if (errM) registrar('Aviso: fallo al generar miniaturas: ' + String(errM.message || errM).split('\n')[0]);

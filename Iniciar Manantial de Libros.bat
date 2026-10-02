@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 1252 >nul
 title Manantial de Libros - Biblioteca
 cd /d "%~dp0"

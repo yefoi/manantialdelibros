@@ -465,11 +465,19 @@ foreach ($l in $libros) {
     if ($letrasTomadas.ContainsKey("$firma|$letraAsignada")) {
       $libre = @($letras | Where-Object { -not $letrasTomadas.ContainsKey("$firma|$_") })
       if ($libre.Count) { $letraAsignada = $libre[0] }
+      else {
+        # ya no queda ningun grupo de archivos libre para este ejemplar:
+        # se queda sin fotos (antes se repetia el ultimo grupo y salian
+        # dos fichas con la misma portada)
+        continue
+      }
     }
     $letrasTomadas["$firma|$letraAsignada"] = $true
   }
   $g = $grupos[$k][$letraAsignada]
   if (-not $g) { continue }
+  # no repetir un grupo cuyos archivos ya estan puestos en otro libro
+  if (@(@($g.img1) + @($g.img2) + @($g.docs)) | Where-Object { $usados.ContainsKey($_) }) { continue }
   $l.portadas = @($g.img1)
   $l.contraportadas = @($g.img2)
   $l.infoArchivo = if ($g.docs.Count) { $g.docs[0] } else { '' }
@@ -560,6 +568,9 @@ foreach ($entrada in ($gruposLibres.Values | Sort-Object { $_.Clave })) {
     }
     $g = $entrada.G
     $l = $mejor.Libro
+    # no usar fotos que ya esten puestas en otro libro (un mismo archivo puede
+    # estar en dos claves por el articulo: "algo, el" y "el algo")
+    if (@(@($g.img1) + @($g.img2) + @($g.docs)) | Where-Object { $usados.ContainsKey($_) }) { continue }
     $l.portadas = @($g.img1)
     $l.contraportadas = @($g.img2)
     $l.infoArchivo = if ($g.docs.Count) { $g.docs[0] } else { '' }
@@ -590,6 +601,9 @@ foreach ($k in $grupos.Keys) {
 $extra = 0
 foreach ($entrada in ($gruposLibres2.Values | Sort-Object { $_.G.nombre })) {
   if ($entrada.Clave -match '^\d+$' -or $entrada.Clave.Length -lt 3) { continue }
+  # la misma lista se construyo antes del bucle: hay que comprobar de nuevo que
+  # estas fotos no se hayan puesto ya en otro libro (evita fichas duplicadas)
+  if (@(@($entrada.G.img1) + @($entrada.G.img2) + @($entrada.G.docs)) | Where-Object { $usados.ContainsKey($_) }) { continue }
   $nombre = $entrada.G.nombre
   # des-invertir el articulo: "habana, la" -> "la habana"
   $m = [regex]::Match($nombre, '^(.*?),\s*(el|la|los|las|un|una)\s*$', 'IgnoreCase')
