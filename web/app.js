@@ -882,7 +882,7 @@
     if (aviso) {
       aviso.hidden = !(estado.sesion.logueado && pendientes > 0);
       aviso.textContent = pendientes > 0
-        ? 'Hay ' + pendientes + ' cambio(s) de estado pendientes de pasar al Excel (normalmente porque el Excel estaba abierto). Se reintenta solo cada minuto.'
+        ? 'Hay ' + pendientes + ' cambio(s) de estado pendientes de escribir en el Excel. Si tienes el Excel abierto, Windows no deja escribir en él: en cuanto lo cierres se pasarán solos (se reintenta cada minuto).'
         : '';
       $('#btnVolcarExcel').hidden = pendientes <= 0;
     }
