@@ -567,10 +567,12 @@ foreach ($k in $grupos.Keys) {
 }
 Escribir ("  grupos de archivos sin asignar: {0}" -f $gruposLibres.Count)
 
-# libros sin portada, indexados por letra inicial de su clave
+# libros a los que les falta algo (fotos o documento), por letra inicial de su clave
 $librosLibres = @{}
 foreach ($l in $libros) {
-  if ($l.portadas.Count -gt 0 -or $l.contraportadas.Count -gt 0 -or $l.infoArchivo) { continue }
+  $sinFotos = -not (@($l.portadas).Count + @($l.contraportadas).Count)
+  $sinDoc = -not $l.infoArchivo
+  if (-not $sinFotos -and -not $sinDoc) { continue }   # ficha completa
   $k = (@(Claves $l.titulo))[0]
   if (-not $k) { continue }
   $letra0 = $k.Substring(0, 1)
@@ -592,8 +594,16 @@ foreach ($entrada in ($gruposLibres.Values | Sort-Object { $_.Clave })) {
   $letra0 = $k.Substring(0, 1)
   $candidatos = @()
   if ($librosLibres.ContainsKey($letra0)) { $candidatos = $librosLibres[$letra0] }
+  $g = $entrada.G
+  $traeImagenes = (@($g.img1).Count + @($g.img2).Count) -gt 0
+  $traeDoc = @($g.docs).Count -gt 0
   $mejor = $null; $mejorPunt = 0.0
   foreach ($cand in $candidatos) {
+    # solo sirven los libros a los que les falte justo lo que trae el grupo
+    # (si ya tiene el .docx, todavia puede recibir sus fotos, y al reves)
+    $sinFotos = -not (@($cand.Libro.portadas).Count + @($cand.Libro.contraportadas).Count)
+    $sinDoc = -not $cand.Libro.infoArchivo
+    if (-not (($traeImagenes -and $sinFotos) -or ($traeDoc -and $sinDoc))) { continue }
     if (DescartePorLongitud $k $cand.Clave) { continue }
     $p = Similitud $k $cand.Clave
     if ($p -gt $mejorPunt) { $mejorPunt = $p; $mejor = $cand }
@@ -602,31 +612,40 @@ foreach ($entrada in ($gruposLibres.Values | Sort-Object { $_.Clave })) {
     $otro = $null; $segundoPunt = 0.0
     foreach ($cand in $candidatos) {
       if ($cand -eq $mejor) { continue }
+      $sinFotos = -not (@($cand.Libro.portadas).Count + @($cand.Libro.contraportadas).Count)
+      $sinDoc = -not $cand.Libro.infoArchivo
+      if (-not (($traeImagenes -and $sinFotos) -or ($traeDoc -and $sinDoc))) { continue }
       if (DescartePorLongitud $k $cand.Clave) { continue }
       $p = Similitud $k $cand.Clave
       if ($p -gt $segundoPunt) { $segundoPunt = $p; $otro = $cand }
     }
-    if ($segundoPunt -ge ($mejorPunt - 0.02)) {   # demasiado parecido: lo dejamos para revision
+    # si el segundo candidato es el MISMO titulo (varias filas iguales en el
+    # Excel, p. ej. dos ejemplares) no es una ambiguedad: se asigna al primero
+    $mismoTitulo = $otro -and ($otro.Clave -eq $mejor.Clave)
+    if ($segundoPunt -ge ($mejorPunt - 0.02) -and -not $mismoTitulo) {   # demasiado parecido: lo dejamos para revision
       $ambiguos++
       $otroTitulo = if ($otro) { $otro.Libro.titulo } else { '?' }
       [void]$ambiguosLista.Add((Item-Aviso $entrada.G.nombre ("parecido a """ + $mejor.Libro.titulo + """ y a """ + $otroTitulo + """; no se ha asignado") ''))
       continue
     }
-    $g = $entrada.G
     $l = $mejor.Libro
-    # no usar fotos que ya esten puestas en otro libro (un mismo archivo puede
-    # estar en dos claves por el articulo: "algo, el" y "el algo")
+    # no repetir archivos que ya esten puestos en otro libro
     if (@(@($g.img1) + @($g.img2) + @($g.docs)) | Where-Object { $usados.ContainsKey($_) }) { continue }
-    $l.portadas = @($g.img1)
-    $l.contraportadas = @($g.img2)
-    $l.infoArchivo = if ($g.docs.Count) { $g.docs[0] } else { '' }
+    # se anade solo lo que le falte, sin pisar lo que ya tiene
+    $puesto = $false
+    if ($traeImagenes -and -not (@($l.portadas).Count + @($l.contraportadas).Count)) {
+      $l.portadas = @($g.img1)
+      $l.contraportadas = @($g.img2)
+      if ($g.img1.Count) { $conPortada++ }
+      $puesto = $true
+    } elseif ($traeDoc -and -not $l.infoArchivo) {
+      $l.infoArchivo = $g.docs[0]
+      $puesto = $true
+    }
+    if (-not $puesto) { continue }
     $l.variante = "~$($entrada.Letra)"
-    if ($g.img1.Count) { $conPortada++ }
     foreach ($n in @($g.img1) + @($g.img2) + @($g.docs)) { $usados[$n] = $true }
     [void]$sugerencias.Add(("{0,-45} -> {1}  ({2:P0})" -f $k, $mejor.Clave, $mejorPunt))
-    # quitar de la lista de libres
-    $claveLetra = $letra0
-    $librosLibres[$claveLetra] = @($librosLibres[$claveLetra] | Where-Object { $_.Libro -ne $l })
   }
 }
 Escribir ("  emparejados por similitud: {0}  (ambiguos descartados: {1})" -f $sugerencias.Count, $ambiguos)
