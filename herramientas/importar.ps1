@@ -88,7 +88,32 @@ function FechaExcel([string]$v) {
   return $v
 }
 
-function ArreglarTitulo([string]$titulo, [string]$archivo) {  # El listado del Excel escribe los titulos por la palabra significativa
+# Numero de tomo al final del titulo: "II" -> 2, "2" -> 2, "(III)" -> 3.
+# Sirve para no mezclar tomos: un archivo del tomo I no debe irse al tomo II.
+function NumeroTomo([string]$clave) {
+  $m = [regex]::Match($clave, '[ (](I{1,3}|IV|VI{0,3}|IX|X|\d{1,2})\)?$')
+  if (-not $m.Success) { return '' }
+  $v = $m.Groups[1].Value
+  if ($v -match '^\d+$') { return [string][int]$v }
+  switch ($v) {
+    'I' { return '1' } 'II' { return '2' } 'III' { return '3' } 'IV' { return '4' }
+    'V' { return '5' } 'VI' { return '6' } 'VII' { return '7' } 'VIII' { return '8' }
+    'IX' { return '9' } 'X' { return '10' }
+  }
+  return ''
+}
+
+# ¿Son del mismo tomo el grupo de archivos y el libro? (I no se mezcla con II)
+function MismoTomo([string]$claveGrupo, $libro) {
+  $tomoGrupo = NumeroTomo $claveGrupo
+  if (-not $tomoGrupo) { return $true }        # el archivo no dice el tomo
+  $tomoLibro = NumeroTomo ((@(Claves $libro.titulo))[0])
+  if (-not $tomoLibro) { return $true }        # el libro no dice el tomo
+  return ($tomoLibro -eq $tomoGrupo)
+}
+
+function ArreglarTitulo([string]$titulo, [string]$archivo) {
+  # El listado del Excel escribe los titulos por la palabra significativa
   # ("alcalde de Zalamea"); los nombres de archivo llevan el articulo al final
   # ("alcalde de zalamea, el 01.jpg"). Aqui se reconstruye el titulo completo.
   $t = ([string]$titulo).Trim()
@@ -304,13 +329,31 @@ foreach ($a in $archivos) {
   $letra = ''
   $numero = ''
   $nombre = $base
-  # quitar marcas finales: (I) (II) (3) [final]
-  $nombre = [regex]::Replace($nombre, '\s*[\(\[\{]\s*[IVXivx0-9]{1,3}\s*[\)\]\}]\s*$', '')
+  $tomo = ''
+  # un marcador romano al final del nombre, como "piedra lunar, la 01 (II).jpg",
+  # es el TOMO del libro: se conserva (antes se borraba y se mezclaban tomos)
+  $mt = [regex]::Match($nombre, '(?<resto>.*?)\s*[\(\[\{]\s*(?<rom>[IVX]{1,4})\s*[\)\]\}]\s*$')
+  if ($mt.Success -and $mt.Groups['resto'].Value.Trim()) {
+    $tomo = ' ' + $mt.Groups['rom'].Value.ToUpperInvariant()
+    $nombre = $mt.Groups['resto'].Value
+  } else {
+    # otras marcas finales entre parentesis ((3), [final]...) si se quitan
+    $nombre = [regex]::Replace($nombre, '\s*[\(\[\{]\s*[IVXivx0-9]{1,3}\s*[\)\]\}]\s*$', '')
+  }
   $m = [regex]::Match($nombre, '^(?<n>.*?)[\s_-]+0?(?<num>[123])\s*(?<letra>[a-z])?$')
   if ($m.Success) {
     $nombre = $m.Groups['n'].Value.Trim()
     $numero = $m.Groups['num'].Value
     $letra = $m.Groups['letra'].Value
+  } elseif (-not $tomo) {
+    # nada que hacer
+  }
+  # con tomo, el articulo invertido tiene que ir delante: "piedra lunar, la I"
+  # -> "la piedra lunar I" (asi coincide con el titulo del Excel)
+  if ($tomo) {
+    $mi = [regex]::Match($nombre, '^(?<n>.*?),\s*(?<art>el|la|los|las)\s*$', 'IgnoreCase')
+    if ($mi.Success) { $nombre = $mi.Groups['art'].Value + ' ' + $mi.Groups['n'].Value }
+    $nombre = ($nombre.Trim() + $tomo)
   }
   if (-not $nombre) { continue }
   # diagnostico de numeracion (una sola vez por archivo)
@@ -432,6 +475,9 @@ if ($asociaciones.Count) {
         # todo el grupo (portada, contraportada y documento) va a su libro,
         # aunque algun archivo (p. ej. un .docx recien creado) no tenga aun asociacion
         $l = $porIdAsoc[(@($duenos.Keys))[0]]
+        # los tomos no se mezclan: si la asociacion guardada apunta a un tomo
+        # distinto (viene de un reparto antiguo equivocado), se ignora
+        if (-not (MismoTomo $k $l)) { continue }
         foreach ($n in @($g.img1)) {
           if ($usados.ContainsKey($n)) { continue }
           if (@($l.portadas).Count -eq 0) { $conPortada++ }
@@ -455,6 +501,7 @@ if ($asociaciones.Count) {
           $idAsoc = [string]$asociaciones[$n]
           if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
           $l = $porIdAsoc[$idAsoc]
+          if (-not (MismoTomo $k $l)) { continue }
           if (@($l.portadas).Count -eq 0) { $conPortada++ }
           $l.portadas = @(@($l.portadas) + $n)
           $usados[$n] = $true
@@ -464,6 +511,7 @@ if ($asociaciones.Count) {
           $idAsoc = [string]$asociaciones[$n]
           if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
           $l = $porIdAsoc[$idAsoc]
+          if (-not (MismoTomo $k $l)) { continue }
           $l.contraportadas = @(@($l.contraportadas) + $n)
           $usados[$n] = $true
         }
@@ -472,6 +520,7 @@ if ($asociaciones.Count) {
           $idAsoc = [string]$asociaciones[$n]
           if (-not $idAsoc -or -not $porIdAsoc.ContainsKey($idAsoc)) { continue }
           $l = $porIdAsoc[$idAsoc]
+          if (-not (MismoTomo $k $l)) { continue }
           if (-not $l.infoArchivo) { $l.infoArchivo = $n; $usados[$n] = $true }
         }
       }
@@ -605,6 +654,8 @@ foreach ($entrada in ($gruposLibres.Values | Sort-Object { $_.Clave })) {
     $sinDoc = -not $cand.Libro.infoArchivo
     if (-not (($traeImagenes -and $sinFotos) -or ($traeDoc -and $sinDoc))) { continue }
     if (DescartePorLongitud $k $cand.Clave) { continue }
+    # los tomos no se mezclan: I va con I, II con II (o con 2)
+    if (-not (MismoTomo $k $cand.Libro)) { continue }
     $p = Similitud $k $cand.Clave
     if ($p -gt $mejorPunt) { $mejorPunt = $p; $mejor = $cand }
   }
@@ -616,6 +667,7 @@ foreach ($entrada in ($gruposLibres.Values | Sort-Object { $_.Clave })) {
       $sinDoc = -not $cand.Libro.infoArchivo
       if (-not (($traeImagenes -and $sinFotos) -or ($traeDoc -and $sinDoc))) { continue }
       if (DescartePorLongitud $k $cand.Clave) { continue }
+      if (-not (MismoTomo $k $cand.Libro)) { continue }
       $p = Similitud $k $cand.Clave
       if ($p -gt $segundoPunt) { $segundoPunt = $p; $otro = $cand }
     }
