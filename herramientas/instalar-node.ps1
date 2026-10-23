@@ -11,10 +11,14 @@
 #  No instala nada en el sistema ni pide permisos de administrador.
 # =====================================================================
 [CmdletBinding()]
-param([string]$Version = 'v24.21.0')
+param(
+  [string]$Version = 'v24.21.0',
+  [string]$Raiz = ''
+)
 
 $ErrorActionPreference = 'Stop'
-$Raiz = Split-Path -Parent $PSScriptRoot
+if (-not $Raiz) { $Raiz = Split-Path -Parent $PSScriptRoot }
+$enRed = $Raiz.StartsWith('\\')
 $runtime = Join-Path $Raiz 'runtime'
 $nodeProyecto = Join-Path $runtime 'node\node.exe'
 $baseLocal = Join-Path $env:LOCALAPPDATA 'Manantial de Libros'
@@ -23,7 +27,12 @@ $nodeLocal = Join-Path $baseLocal 'node\node.exe'
 Write-Host ""
 
 # 1) ¿Ya esta preparado en algun sitio?
-foreach ($cand in @($nodeProyecto, $nodeLocal)) {
+# En una ruta de red NO se usa el Node del proyecto (muchas empresas bloquean
+# ejecutar programas desde la red): se prefiere el instalado en este PC.
+$candidatos = @()
+if (-not $enRed) { $candidatos += $nodeProyecto }
+$candidatos += $nodeLocal
+foreach ($cand in $candidatos) {
   if (Test-Path $cand) {
     Write-Host "  Node.js ya esta preparado: $cand" -ForegroundColor Green
     & $cand --version
@@ -51,7 +60,6 @@ if ($sistema) {
 }
 
 # 2) ¿Donde se puede preparar? (el proyecto puede ser una ruta de red o de solo lectura)
-$enRed = $Raiz.StartsWith('\\')
 $puedeEscribir = $false
 try {
   New-Item -ItemType Directory -Force -Path $runtime | Out-Null
