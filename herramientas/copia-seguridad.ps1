@@ -2,8 +2,11 @@
 #  Manantial de Libros - copia de seguridad de los datos del sitio
 #  Crea un ZIP con fecha dentro de la carpeta "copias"
 # =====================================================================
+[CmdletBinding()]
+param([string]$Raiz = '')
+
 $ErrorActionPreference = 'Stop'
-$Raiz = Split-Path -Parent $PSScriptRoot
+if (-not $Raiz) { $Raiz = Split-Path -Parent $PSScriptRoot }
 $datos = Join-Path $Raiz 'datos'
 $copias = Join-Path $Raiz 'copias'
 New-Item -ItemType Directory -Force -Path $copias | Out-Null

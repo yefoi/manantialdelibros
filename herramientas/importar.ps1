@@ -6,14 +6,15 @@
 [CmdletBinding()]
 param(
   [string]$Ajustes = "",
-  [switch]$Silencioso
+  [switch]$Silencioso,
+  [string]$Raiz = ""
 )
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 Add-Type -AssemblyName System.IO.Compression
 
-$Raiz = Split-Path -Parent $PSScriptRoot
+if (-not $Raiz) { $Raiz = Split-Path -Parent $PSScriptRoot }
 if (-not $Ajustes) { $Ajustes = Join-Path $Raiz 'datos\ajustes.json' }
 
 # ------------------------------------------------- cache de los .docx leidos

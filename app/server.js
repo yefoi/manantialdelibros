@@ -1483,7 +1483,25 @@ function actualizarCatalogo(motivo, cb) {
 function ejecutarPowerShell(script, argumentos, cb) {
   const ruta = path.join(RAIZ, 'herramientas', script);
   if (!fs.existsSync(ruta)) { registrar('No encuentro ' + ruta); return cb(new Error('script no encontrado')); }
-  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ruta].concat(argumentos || []),
+  let ejecutable = ruta;
+  let args = (argumentos || []).slice();
+  // En una ruta de red la directiva de PowerShell (RemoteSigned) no deja
+  // ejecutar archivos .ps1: se copia el script a una carpeta local y se
+  // ejecuta desde ahi, pasandole la carpeta del proyecto con -Raiz.
+  if (RAIZ.startsWith('\\\\')) {
+    try {
+      const carpetaTmp = path.join(os.tmpdir(), 'manantial-scripts');
+      fs.mkdirSync(carpetaTmp, { recursive: true });
+      const copia = path.join(carpetaTmp, script);
+      fs.copyFileSync(ruta, copia);
+      ejecutable = copia;
+      args = ['-Raiz', RAIZ].concat(args);
+    } catch (e) {
+      registrar('Aviso: no se pudo copiar ' + script + ' a una carpeta local: ' + e.message);
+      args = ['-Raiz', RAIZ].concat(args);
+    }
+  }
+  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ejecutable].concat(args),
     { windowsHide: true, maxBuffer: 16 * 1024 * 1024, timeout: 20 * 60 * 1000 }, cb);
 }
 

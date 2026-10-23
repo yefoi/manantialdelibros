@@ -6,12 +6,13 @@
 [CmdletBinding()]
 param(
   [string]$Archivo = '',
-  [switch]$Forzar
+  [switch]$Forzar,
+  [string]$Raiz = ''
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
-$Raiz = Split-Path -Parent $PSScriptRoot
+if (-not $Raiz) { $Raiz = Split-Path -Parent $PSScriptRoot }
 $Origen = ''
 $cfgPath = Join-Path $Raiz 'datos\ajustes.json'
 if (Test-Path $cfgPath) { $Origen = (Get-Content $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json).origenLibros }

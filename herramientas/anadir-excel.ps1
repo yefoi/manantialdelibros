@@ -8,12 +8,13 @@
 [CmdletBinding()]
 param(
   [string]$Ajustes = '',
-  [string]$Datos = ''
+  [string]$Datos = '',
+  [string]$Raiz = ''
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$Raiz = Split-Path -Parent $PSScriptRoot
+if (-not $Raiz) { $Raiz = Split-Path -Parent $PSScriptRoot }
 if (-not $Ajustes) { $Ajustes = Join-Path $Raiz 'datos\ajustes.json' }
 if (-not $Datos -or -not (Test-Path $Datos)) { Write-Error 'Falta -Datos <ruta.json>'; exit 2 }
 $Excel = (Get-Content $Ajustes -Raw -Encoding UTF8 | ConvertFrom-Json).origenExcel
