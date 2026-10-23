@@ -15,9 +15,18 @@ sin dependencias: el servidor está escrito en Node.js usando solo la librería 
 
 ## Puesta en marcha rápida (Windows)
 
-1. **Preparar el ordenador** (solo la primera vez):
-   doble clic en `Preparar (nuevo ordenador).bat`
-   Descarga Node.js portable dentro de `runtime\`. No instala nada en el sistema.
+> **No hay dependencias**: no existe `package.json` ni hay que ejecutar `npm install`.
+> Lo único que hace falta es Node.js (18 o superior), y el proyecto lo resuelve solo.
+
+1. **Preparar el ordenador** (solo la primera vez), en PowerShell desde la carpeta del proyecto:
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File ".\herramientas\instalar-node.ps1"
+   ```
+   - si ya hay un Node.js moderno en el equipo, lo usa;
+   - si existe `runtime\node.zip`, lo descomprime (sirve sin internet);
+   - si no, descarga Node.js portable en `runtime\node` (sin permisos de administrador).
+   También puedes hacer doble clic en `Preparar (nuevo ordenador).bat`.
+   El `-ExecutionPolicy Bypass` evita el error *"la ejecución de scripts está deshabilitada"*.
 
 2. **Importar el catálogo**:
    copia el Excel y la carpeta de fotos al escritorio (ver *Datos de entrada*) y ejecuta
@@ -34,6 +43,10 @@ sin dependencias: el servidor está escrito en Node.js usando solo la librería 
    Después, desde el móvil: `http://<ip-de-este-ordenador>:8080`
 
 Usuario y contraseña iniciales: **`koine` / `refugio`** — se cambian desde *Ajustes* dentro del sitio.
+
+> **Si da error de permisos al preparar Node:** mueve la carpeta del proyecto a `Documentos`
+> (no la dejes en `Program Files` ni en la raíz de `C:`) y repite el paso 1.
+> **Si no hay internet:** copia `runtime\node.zip` o `runtime\node` desde otro equipo.
 
 ---
 

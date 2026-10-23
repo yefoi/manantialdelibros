@@ -216,6 +216,35 @@ esté abierto) y se actualiza sola en menos de un minuto. Los navegadores
 que estén abiertos se refrescan solos, sin hacer nada.
 
 
+Instalar en otro ordenador (desde GitHub)
+-----------------------------------------
+El proyecto NO tiene dependencias: no hay que ejecutar "npm install".
+Solo hace falta Node.js. En PowerShell, desde la carpeta del proyecto:
+
+    powershell -NoProfile -ExecutionPolicy Bypass -File ".\herramientas\instalar-node.ps1"
+
+El "-ExecutionPolicy Bypass" es lo que evita el error de permisos mas
+habitual de PowerShell ("la ejecucion de scripts esta deshabilitada en
+este sistema").
+
+El instalador hace lo siguiente, por este orden:
+   1. Si el ordenador ya tiene Node.js 18 o superior, usa ese (no descarga).
+   2. Si existe runtime\node.zip, lo descomprime (vale sin internet).
+   3. Si no, lo descarga dentro de runtime\node (no instala nada en el
+      sistema: no hacen falta permisos de administrador).
+
+Si no hay internet en ese ordenador: copia de este PC la carpeta
+runtime\node  (o solo el archivo runtime\node.zip) y ejecuta el mismo
+comando: lo usara sin descargar nada.
+
+Si sale "Acceso denegado" al descomprimir: esa carpeta no tiene permisos
+de escritura. Mueve todo el proyecto a Documentos o al escritorio y
+vuelve a intentarlo (no lo dejes en Program Files ni en la raiz de C:).
+
+Despues, para arrancar:
+    doble clic en "Iniciar Manantial de Libros.bat"
+
+
 Notas
 -----
 · El Excel NO se modifica nunca: es la fuente original. Los cambios del
