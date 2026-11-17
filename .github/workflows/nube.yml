@@ -1,0 +1,38 @@
+name: Comprobar alternativas de nube
+on:
+  push:
+    branches: [codex/alternativas-nube]
+  pull_request:
+    paths: ['nube/**', 'package*.json', 'Dockerfile', '.github/workflows/nube.yml']
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --omit=dev
+      - name: Construir y arrancar contenedor
+        if: matrix.node == 24
+        run: |
+          docker build -t manantial-prueba .
+          docker run -d --name manantial-ci -p 127.0.0.1:18080:8080 -e NODE_ENV=development -e PUBLIC_URL=http://localhost:18080 -e ADMIN_PASSWORD=contrasena-solo-pruebas-ci -e SESSION_SECRET=secreto-temporal-exclusivo-de-pruebas-ci manantial-prueba
+          for intento in $(seq 1 30); do
+            if curl --fail --silent http://localhost:18080/readyz; then
+              docker stop manantial-ci
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs manantial-ci
+          docker stop manantial-ci
+          exit 1

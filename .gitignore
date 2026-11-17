@@ -35,3 +35,15 @@ desktop.ini
 *.tmp
 datos/excel-pendiente.json
 datos/copias-excel/
+
+# Configuración y datos de las alternativas en la nube
+node_modules/
+.env
+.env.*
+!.env.example
+!*.env.example
+.nube-datos/
+output/
+*.log
+*-token.json
+msal-cache.json
