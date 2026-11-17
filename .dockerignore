@@ -1,0 +1,10 @@
+.git
+.env*
+.nube-datos
+datos
+copias
+runtime
+node_modules
+output
+alternativas
+*.xlsx

@@ -1,0 +1,22 @@
+{
+  "name": "manantial-de-libros-nube",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Catálogo en la nube con Microsoft 365, Google o almacenamiento independiente",
+  "engines": { "node": ">=22.9.0" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env nube/server.cjs",
+    "test": "node --test nube/test/*.test.cjs",
+    "nube:preparar": "node nube/preparar.cjs",
+    "conectar:microsoft": "node --env-file-if-exists=.env nube/conectar.cjs microsoft",
+    "conectar:google": "node --env-file-if-exists=.env nube/conectar.cjs google"
+  },
+  "dependencies": {
+    "@azure/msal-node": "7.2.2",
+    "exceljs": "4.4.0",
+    "google-auth-library": "10.5.0",
+    "jszip": "3.10.1",
+    "sharp": "0.35.5"
+  },
+  "overrides": { "exceljs": { "uuid": "11.1.1" } }
+}

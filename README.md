@@ -1,5 +1,7 @@
 # Manantial de Libros
 
+> **Alternativas en la nube:** esta rama incluye tres versiones configurables: Microsoft 365 (OneDrive/SharePoint), Google Sheets + Drive e independiente con gestión desde el navegador. Empieza por [Elegir una alternativa en el centro](alternativas/README.md). La versión local documentada a continuación se conserva; la nube arranca con `npm start` y tiene su propia carpeta de datos.
+
 Sitio web de la biblioteca comunitaria **Manantial de Libros** (Refugio Koiné): un catálogo
 para consultar qué libros hay en las estanterías, cuáles están disponibles, cuáles prestados
 y cuáles se han donado.

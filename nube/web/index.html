@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Manantial de Libros · Catálogo</title>
+  <link rel="icon" href="/assets/icono.ico"><link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="cabecera"><a class="marca" href="/"><img src="/assets/img/logo-libros.png" alt=""><span>Manantial<br><b>de Libros</b></span></a><nav aria-label="Acciones"><button id="verMapa">Estanterías</button><button id="acceso">Entrar</button></nav></header>
+  <main>
+    <section class="intro"><p class="ceja">REFUGIO KOINÉ · BIBLIOTECA COMUNITARIA</p><h1>Un libro, un encuentro.</h1><p>Explora nuestra biblioteca y encuentra tu próxima lectura.</p><p id="resumen" class="nota" aria-live="polite">Cargando el catálogo…</p></section>
+    <p id="conexion" class="aviso" role="status" hidden></p>
+    <form id="busqueda" class="filtros" role="search"><label class="buscador"><span>Busca un libro</span><input id="texto" type="search" placeholder="Título, autor o editorial…"></label><label><span>Estado</span><select id="estado"><option value="">Todos</option><option>Disponible</option><option>Prestado</option><option>Donado</option></select></label><label><span>Categoría</span><select id="categoria"><option value="">Todas</option></select></label><button type="button" id="nuevo" class="principal" hidden>Añadir libro</button></form>
+    <section id="catalogo" class="rejilla" aria-label="Libros"></section>
+    <p id="vacio" class="vacio" hidden>No hay libros que coincidan con la búsqueda.</p><button id="mas" class="mas" hidden>Mostrar más libros</button>
+    <section id="mapa" aria-label="Mapa de estanterías" hidden><h2>En nuestras estanterías</h2><p class="nota">Los libros donados ya no aparecen en el mapa.</p><div id="estantes"></div></section>
+  </main>
+  <footer>Manantial de Libros · Fundación Manantial <span id="proveedor"></span></footer>
+  <div id="avisos" role="status" aria-live="polite"></div>
+  <dialog id="detalle"><button class="cerrar" data-cerrar="detalle" aria-label="Cerrar ficha">×</button><div id="ficha"></div></dialog>
+  <dialog id="login"><button class="cerrar" data-cerrar="login" aria-label="Cerrar acceso">×</button><h2>Acceso de socios</h2><p>Consulta libre. La edición está reservada al personal de la biblioteca.</p><form id="formLogin"><label>Usuario<input name="usuario" autocomplete="username" required></label><label>Contraseña<input name="clave" type="password" autocomplete="current-password" required></label><p class="error" id="errorLogin" role="alert"></p><button class="principal">Entrar</button></form></dialog>
+  <dialog id="admin"><button class="cerrar" data-cerrar="admin" aria-label="Cerrar gestión">×</button><h2>Gestión de la biblioteca</h2><p id="estadoNube" class="nota"></p><div class="acciones"><button id="sincronizar">Actualizar desde la nube</button><a class="boton" href="/api/exportar.xlsx">Descargar Excel</a><a class="boton" href="/api/copia.json">Copia del catálogo (JSON)</a><button id="salir">Cerrar sesión</button></div>
+    <section id="importacion" hidden><h3>Importar el catálogo inicial</h3><p>Selecciona el Excel preparado o el listado original con columnas A:K. El catálogo debe estar vacío.</p><form id="formImportar"><label>Excel .xlsx<input name="archivo" type="file" accept=".xlsx" required></label><button>Importar Excel</button></form></section>
+    <section><h3>Subir la carpeta de fotos y documentos</h3><p>Selecciona hasta 100 archivos y 32 MB por envío. Se conservan los nombres de la preparación. Las asociaciones ambiguas se dejan para revisión.</p><form id="formArchivos"><label>Fotos y documentos<input name="archivos" type="file" accept=".jpg,.jpeg,.png,.webp,.docx,.pdf,.txt,.md" multiple required></label><button>Subir archivos</button></form><pre id="informe" class="nota"></pre></section>
+    <section><h3>Historial de cambios de la web</h3><p class="nota">Los cambios realizados directamente en Excel o Google Sheets se consultan en el historial de esas herramientas.</p><button id="cargarHistorial">Ver historial</button><div id="historial"></div></section>
+    <p class="nota">La copia JSON incluye las fichas y el historial. Para una copia completa conserva también las fotos y la carpeta privada de datos del alojamiento.</p>
+  </dialog>
+</body>
+</html>
